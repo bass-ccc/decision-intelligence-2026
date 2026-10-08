@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>決策智慧 2026 · DIVE</title>
+  <meta name="description" content="《2026 決策智慧》3D 世界——從雨夜屋頂往下潛：運河、水下、深網。殼越強，魂在哪裡？22 篇觀點在不同深度等你。" />
+  <meta name="theme-color" content="#05080a" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2305080a'/%3E%3Cpath d='M16 5v22' stroke='%2368f0c4' stroke-width='2'/%3E%3Cpath d='M9 9h14M11 15h10M13 21h6' stroke='%2368f0c4' stroke-width='1.4' opacity='.7'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@300;400;500;600&family=IBM+Plex+Mono:wght@300;400;500&family=Noto+Sans+TC:wght@300;400;500;700;900&family=Noto+Serif+TC:wght@500;700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/shell.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body class="is-loading">
+  <canvas id="gl" aria-hidden="true"></canvas>
+  <div id="labels" aria-hidden="true"></div>
+  <div id="pm" aria-live="polite"></div>
+  <div id="scan" aria-hidden="true"></div>
+
+  <!-- Boot -->
+  <div id="loader" role="status" aria-live="polite">
+    <div class="ld-box">
+      <div class="ld-top mono"><span>DECISION INTELLIGENCE 2026</span><span id="ld-pct">000%</span></div>
+      <pre class="ld-log mono" id="ld-log"></pre>
+      <div class="ld-bar"><i id="ld-bar"></i></div>
+    </div>
+  </div>
+
+  <!-- Hero -->
+  <section id="hero" aria-label="封面">
+    <div class="hero-main">
+      <div class="hero-kicker mono"><i></i>GHOST · SHELL · DECISION<span class="hero-pub">電通行銷傳播集團 · DENTSU TAIWAN</span></div>
+      <h1 class="hero-title">決策智慧</h1>
+      <div class="hero-en">DECISION INTELLIGENCE <b>2026</b></div>
+      <p class="hero-line">殼越強，<br />魂在哪裡？</p>
+      <p class="hero-lead">AI 是一副越來越強的殼。這本書在找殼裡的魂——信任、真實、判斷。從這座雨夜的屋頂往下潛，22 篇觀點在不同的深度等你。</p>
+      <button id="enter" class="btn-dive" disabled>
+        <span class="bd-zh">潛入</span><span class="bd-en">DIVE</span><i aria-hidden="true">↓</i>
+      </button>
+      <div class="hero-how mono">滾動往下潛 · 拖曳環顧 · 按住空白鍵開啟魂視</div>
+    </div>
+    <ol class="hero-depths mono" aria-label="深度">
+      <li style="--c: var(--intro)"><b>+094</b>屋頂　序章</li>
+      <li style="--c: var(--people)"><b>±000</b>運河　01 人</li>
+      <li style="--c: var(--model)"><b>−072</b>水下　02 模型</li>
+      <li style="--c: var(--ai)"><b>−330</b>深網　03 行動</li>
+    </ol>
+  </section>
+
+  <!-- HUD -->
+  <header id="topbar" aria-label="主選單">
+    <button class="brand" id="brand" aria-label="回到封面">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-text"><b>決策智慧</b><span class="mono">2026 · DIVE</span></span>
+    </button>
+    <nav class="top-nav">
+      <button class="tb" id="btn-ghost" aria-pressed="false"><span class="mono">GHOST</span><span class="zh">魂視</span></button>
+      <button class="tb" id="btn-index"><span class="mono">INDEX</span><span class="zh">目錄</span></button>
+      <button class="tb" id="btn-sound" aria-pressed="true"><span class="mono">SOUND</span><span class="zh" id="sound-state">開</span></button>
+    </nav>
+  </header>
+
+  <div id="zone" aria-live="polite"></div>
+
+  <nav id="gauge" aria-label="深度計">
+    <button class="gg-step" id="gg-prev" aria-label="上一站">▲</button>
+    <div class="gg-track" id="gg-track"><div class="gg-ticks" id="gg-ticks"></div><div class="gg-head" id="gg-head"><span class="mono" id="gg-depth">+094.0</span></div></div>
+    <button class="gg-step" id="gg-next" aria-label="下一站">▼</button>
+  </nav>
+
+  <div id="status" class="mono" aria-hidden="true">
+    <span id="st-zone">ZONE 00</span><i></i><span id="st-depth">DEPTH +094.0m</span><i></i><span>SYNC <b id="st-sync">00</b>%</span>
+  </div>
+
+  <aside id="card" aria-live="polite" aria-hidden="true"></aside>
+  <div id="gate" aria-live="polite" aria-hidden="true"></div>
+
+  <!-- Ghost vision panel -->
+  <aside id="ghost" aria-label="魂視" aria-hidden="true">
+    <div class="gh-head"><span class="mono">GHOST VISION · 魂視</span><p>12 條主題線，穿過屋頂、運河、水下和深網。點一條，順著它讀下去。</p></div>
+    <div class="gh-chips" id="gh-chips"></div>
+    <div class="gh-result" id="gh-result"></div>
+  </aside>
+
+  <section id="finale" aria-hidden="true"></section>
+
+  <!-- Digest -->
+  <aside id="digest" aria-label="文章重點" aria-hidden="true">
+    <button class="x-close" id="dg-close" aria-label="關閉">✕</button>
+    <div class="dg-scroll" id="dg-scroll"><div id="dg-body"></div></div>
+  </aside>
+
+  <!-- Reader -->
+  <div id="reader" aria-label="原文閱讀" aria-hidden="true">
+    <div class="rd-top">
+      <div class="rd-label"><span class="mono" id="rd-kicker"></span><span id="rd-title"></span></div>
+      <button class="x-close" id="rd-close" aria-label="關閉">✕</button>
+    </div>
+    <div class="rd-stage" id="rd-stage">
+      <div class="rd-spread">
+        <figure class="rd-page" id="rd-l"><img alt="" /></figure>
+        <figure class="rd-page" id="rd-r"><img alt="" /></figure>
+      </div>
+    </div>
+    <button class="rd-nav rd-prev" id="rd-prev" aria-label="上一頁">‹</button>
+    <button class="rd-nav rd-next" id="rd-next" aria-label="下一頁">›</button>
+    <div class="rd-bottom">
+      <input type="range" id="rd-range" min="1" max="196" value="1" aria-label="頁碼" />
+      <span class="mono" id="rd-count">001 / 196</span>
+    </div>
+  </div>
+
+  <!-- Index -->
+  <div id="index" aria-label="目錄" aria-hidden="true">
+    <button class="x-close" id="ix-close" aria-label="關閉">✕</button>
+    <div class="ix-scroll"><div class="ix-body" id="ix-body"></div></div>
+  </div>
+
+  <div id="toast" aria-live="polite"></div>
+
+  <noscript><p class="noscript">這個 3D 世界需要開啟 JavaScript 與 WebGL。</p></noscript>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
