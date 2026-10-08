@@ -1,0 +1,10 @@
+# the print-ready PDF and the walkthrough video stay off the web (and over GitHub's 100 MB limit)
+*.pdf
+*.mp4
+.claude/
+Thumbs.db
+desktop.ini
+
+# 三座巨像 is kept on this computer only (not published)
+world/
+start-world.bat

@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <!-- the page lives in /tower/ but shares the book's assets at the site root -->
+  <base href="../" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>決策智慧 2026 · Decision Intelligence</title>
+  <meta name="description" content="《2026 決策智慧》互動 3D 閱讀體驗——走進一座由 196 頁、22 篇觀點組成的螺旋書塔。" />
+  <meta name="theme-color" content="#181614" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23181614'/%3E%3Crect x='6' y='6' width='9' height='20' fill='%23C5D96B'/%3E%3Crect x='17' y='6' width='9' height='9' fill='%23F2A9A7'/%3E%3Crect x='17' y='17' width='9' height='9' fill='%236FCDE2'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Montserrat:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700;900&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/css/style.css" />
+  <script type="importmap">
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }
+  </script>
+</head>
+<body class="is-loading">
+  <canvas id="gl" aria-hidden="true"></canvas>
+  <div class="vignette" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <!-- Loader -->
+  <div id="loader" role="status" aria-live="polite">
+    <div class="ld-inner">
+      <div class="ld-mark"><span class="px">2026</span><b>決策智慧</b></div>
+      <pre class="ld-bar" id="ld-bar">[................................]</pre>
+      <div class="ld-row"><span class="px" id="ld-note">LOADING 196 PAGES</span><span class="px" id="ld-pct">000%</span></div>
+    </div>
+  </div>
+
+  <!-- Hero -->
+  <section id="hero" aria-label="封面">
+    <div class="hero-left">
+      <div class="hero-year px">2026 / DENTSU TAIWAN</div>
+      <h1 class="hero-title"><span>決策</span><span>智慧</span></h1>
+      <div class="hero-en px">DECISION<br />INTELLIGENCE</div>
+    </div>
+    <div class="hero-right">
+      <p class="hero-motto">創新放大影響力<span>INNOVATING TO IMPACT</span></p>
+      <p class="hero-lead">當 AI 從工具變成代理人，品牌要比的不是誰用了更多 AI，而是誰更懂人。走進這本書——196 頁、22 篇觀點，繞成一座可以漫步的螺旋書塔。</p>
+      <ul class="hero-facts">
+        <li><b class="px">04</b><span>章節</span></li>
+        <li><b class="px">22</b><span>篇觀點</span></li>
+        <li><b class="px" id="hero-authors">32</b><span>位作者</span></li>
+        <li><b class="px">196</b><span>頁</span></li>
+      </ul>
+      <button id="enter" class="btn-enter" disabled>
+        <span class="be-zh">翻開這本書</span><span class="be-en px">OPEN THE BOOK</span><i aria-hidden="true">→</i>
+      </button>
+    </div>
+    <div class="hero-foot px"><span>SCROLL · DRAG · CLICK</span><button class="motion-btn" data-motion>MOTION <b>ON</b></button><span>電通行銷傳播集團</span></div>
+  </section>
+
+  <!-- Top bar -->
+  <header id="topbar" aria-label="主選單">
+    <button class="brand" id="brand" aria-label="回到開頭">
+      <span class="brand-blocks" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+      <span class="brand-text"><b>決策智慧</b><span class="px">2026</span></span>
+    </button>
+    <nav class="top-nav">
+      <button class="tb motion-btn" data-motion aria-label="切換動態效果"><span class="px">MOTION <b>ON</b></span></button>
+      <button id="btn-index" class="tb"><span class="px">INDEX</span><span class="zh">目錄</span></button>
+      <button id="btn-map" class="tb"><span class="px">OVERVIEW</span><span class="zh">全景</span></button>
+    </nav>
+  </header>
+
+  <!-- Journey HUD -->
+  <aside id="hud" aria-live="polite"></aside>
+
+  <!-- Map UI -->
+  <div id="mapui" aria-label="主題線索">
+    <div class="map-head">
+      <div class="px map-kicker">THREADS · 主題線索</div>
+      <p class="map-hint">選一個主題，看它如何穿過整本書。拖曳旋轉、滾輪縮放、點頁面進入。</p>
+    </div>
+    <div class="map-chips" id="map-chips"></div>
+    <div class="map-result" id="map-result"></div>
+  </div>
+  <div id="labels" aria-hidden="true"></div>
+
+  <!-- Data view (People Model validation) -->
+  <div id="dataui" aria-label="People Model 驗證">
+    <div class="dv-panel">
+      <div class="px dv-kicker">PEOPLE MODEL · VALIDATION</div>
+      <h3>模擬的答案，<br />對得上真人嗎？</h3>
+      <p>保留未參與訓練的真實調查資料作為考卷。每一個字元，是一個回答選項：橫軸是真人調查的回答比例，縱軸是 People Model 模擬的回答比例。越靠近虛線，代表越一致。</p>
+      <div class="dv-stats">
+        <div><b class="px">0.89</b><span>相關係數 r</span></div>
+        <div><b class="px">9.4%</b><span>MAE 平均落差</span></div>
+        <div><b class="px">13.1%</b><span>RMSE 含大誤差</span></div>
+        <div><b class="px">9,221</b><span>驗證點</span></div>
+      </div>
+      <p class="dv-note">依書中公布之驗證結果重建的示意分布（資料來源：電通智能中心 eval_v3 留存回測）。</p>
+      <button class="btn-ghost" id="dv-close">← 回到書頁</button>
+    </div>
+    <div class="dv-axis dv-x px" id="dv-x">真人調查回答比例 (%) →</div>
+    <div class="dv-axis dv-y px" id="dv-y">People Model 模擬回答比例 (%) →</div>
+    <div class="dv-axis dv-d px" id="dv-d">完全一致</div>
+    <div class="dv-axis dv-t px" id="dv-t0">0</div>
+    <div class="dv-axis dv-t px" id="dv-tx">100</div>
+    <div class="dv-axis dv-t px" id="dv-ty">100</div>
+  </div>
+
+  <!-- Timeline -->
+  <nav id="timeline" aria-label="書頁進度">
+    <button class="tl-step" id="tl-prev" aria-label="上一篇">‹</button>
+    <div class="tl-track" id="tl-track">
+      <div class="tl-segs" id="tl-segs"></div>
+      <div class="tl-ticks" id="tl-ticks"></div>
+      <div class="tl-head" id="tl-head"><i></i></div>
+    </div>
+    <button class="tl-step" id="tl-next" aria-label="下一篇">›</button>
+    <div class="tl-page px"><span id="tl-page">P.001</span><em>/196</em></div>
+  </nav>
+
+  <div id="tip" role="tooltip"></div>
+  <div id="toast" aria-live="polite"></div>
+
+  <!-- Digest panel -->
+  <aside id="digest" aria-label="文章重點" aria-hidden="true">
+    <button class="dg-close" id="dg-close" aria-label="關閉">✕</button>
+    <div class="dg-scroll" id="dg-scroll"><div id="dg-body"></div></div>
+  </aside>
+
+  <!-- Index -->
+  <div id="index" class="sheet" aria-label="目錄" aria-hidden="true">
+    <button class="sheet-close" data-close aria-label="關閉">✕</button>
+    <div class="sheet-scroll"><div class="ix-body" id="ix-body"></div></div>
+  </div>
+
+  <!-- Reader -->
+  <div id="reader" aria-label="原文閱讀" aria-hidden="true">
+    <div class="rd-top">
+      <div class="rd-label"><span class="px" id="rd-kicker"></span><span id="rd-title"></span></div>
+      <button class="rd-close" id="rd-close" aria-label="關閉">✕</button>
+    </div>
+    <div class="rd-stage" id="rd-stage">
+      <div class="rd-spread" id="rd-spread">
+        <figure class="rd-page" id="rd-l"><img alt="" /></figure>
+        <figure class="rd-page" id="rd-r"><img alt="" /></figure>
+      </div>
+    </div>
+    <button class="rd-nav rd-prev" id="rd-prev" aria-label="上一頁">‹</button>
+    <button class="rd-nav rd-next" id="rd-next" aria-label="下一頁">›</button>
+    <div class="rd-bottom">
+      <input type="range" id="rd-range" min="1" max="196" value="1" aria-label="頁碼" />
+      <span class="px" id="rd-count">001 / 196</span>
+    </div>
+  </div>
+
+  <div id="cursor" aria-hidden="true"><i></i><span></span></div>
+
+  <script type="module" src="assets/js/main.js"></script>
+</body>
+</html>
