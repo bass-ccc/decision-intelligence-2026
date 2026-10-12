@@ -5,6 +5,11 @@
 Thumbs.db
 desktop.ini
 
+# the film site's web videos are needed online; its raw clips and 2K keyframes are not
+!film/media/*.mp4
+film/media/raw/
+film/media/key/
+
 # 三座巨像 is kept on this computer only (not published)
 world/
 start-world.bat
