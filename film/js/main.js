@@ -121,11 +121,14 @@ async function enter(scene) {
   scr.setDust(false);
   v.onended = () => endFilm(scene);
   v.play().catch(() => {});
+  scr.imageTexture(FILMS[scene].rest); // warm up the sharp still the film ends on
   preloadNext();
 }
 
-function endFilm(id) {
+// The film's last frame swaps to the sharp keyframe it was generated from, hidden by a flash of code.
+function endFilm(id, flash = 0.6) {
   if (st.film !== id) return;
+  pulse(flash);
   st.film = null;
   st.watched.add(id);
   document.querySelectorAll(`[data-go="${id}"], .door[data-id="${id}"]`).forEach((b) => b.classList.add('seen'));
@@ -160,8 +163,7 @@ async function rest(id) {
 
 function skip() {
   if (!st.film || st.busy) return;
-  pulse(1);
-  endFilm(st.film);
+  endFilm(st.film, 1);
 }
 
 function pulse(k) {

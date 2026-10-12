@@ -44,7 +44,7 @@ const QUAD_FRAG = /* glsl */ `
 
   vec3 frame(vec2 p) {
     vec2 d = p - 0.5;
-    vec2 off = d * 0.007 * length(d);
+    vec2 off = d * 0.0035 * length(d);
     return vec3(sampleFit(uTex, uFit, p + off).r, sampleFit(uTex, uFit, p).g, sampleFit(uTex, uFit, p - off).b);
   }
 
