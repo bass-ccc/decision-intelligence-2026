@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data:; connect-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>CLOSER · 2026 決策智慧</title>
+  <meta name="description" content="《2026 決策智慧》互動閱讀版：22 篇觀點，每讀一篇，品牌與人的距離就近一步。" />
+  <meta name="color-scheme" content="light dark" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23dccab0'/%3E%3Cpath d='M7 17c4-3 8 2 9 0' stroke='%2327231f' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='6' cy='17' r='3' fill='%2327231f'/%3E%3Ccircle cx='26' cy='17' r='3' fill='%2327231f'/%3E%3Cpath d='M19 17h1.5M22 17h1' stroke='%2327231f' stroke-width='2'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=LXGW+WenKai+TC:wght@300;400;700&family=Montserrat:wght@200;300;500;700&family=Noto+Sans+TC:wght@300;400;500;700;900&family=Pixelify+Sans:wght@400;600&display=swap" />
+  <link rel="stylesheet" href="css/read.css" />
+</head>
+<body>
+  <a class="skip" href="#view">跳到內容</a>
+
+  <header class="hud" id="hud">
+    <a class="hud-brand" href="#/" aria-label="回到首頁">
+      <span class="hud-zh">決策智慧</span><span class="hud-year">2026</span>
+    </a>
+    <a class="hud-distance" href="#/end" id="hud-distance" aria-label="閱讀距離">
+      <span class="hud-end">品牌</span>
+      <canvas id="hud-line" aria-hidden="true"></canvas>
+      <span class="hud-end">人</span>
+      <span class="hud-count"><b id="hud-num">22</b><small>步</small></span>
+    </a>
+    <nav class="hud-nav">
+      <a href="#/map">目錄</a>
+      <button type="button" id="theme-btn" class="hud-theme" aria-label="切換深淺色">
+        <span aria-hidden="true">◐</span>
+      </button>
+    </nav>
+  </header>
+
+  <main id="view" tabindex="-1"></main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <noscript><p class="noscript">這個網站的動畫需要 JavaScript。</p></noscript>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
