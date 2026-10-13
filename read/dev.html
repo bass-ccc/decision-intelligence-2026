@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CLOSER drawing bench</title>
+  <meta name="robots" content="noindex" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=LXGW+WenKai+TC:wght@300;400;700&family=Montserrat:wght@200;300;500;700&family=Noto+Sans+TC:wght@300;400;500;700;900&family=Pixelify+Sans:wght@400;600&display=swap" />
+  <link rel="stylesheet" href="css/read.css" />
+  <style>
+    body { margin: 0; }
+    .bench { display: grid; grid-template-rows: auto 1fr; height: 100vh; }
+    .bar { display: flex; gap: 8px; align-items: center; padding: 8px 12px; flex-wrap: wrap; font: 13px var(--f-mono); border-bottom: 1px solid var(--faint); }
+    .bar button { border: 1px solid var(--rule); background: none; padding: 4px 8px; cursor: pointer; }
+    .bar button.on { background: var(--ink); color: var(--paper); }
+    .one { position: relative; }
+    .one canvas, .tile canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; padding: 12px; overflow: auto; }
+    .tile { position: relative; aspect-ratio: 4/3; background: var(--sheet); }
+    .tile span { position: absolute; left: 8px; top: 6px; font: 12px var(--f-mono); z-index: 1; }
+  </style>
+</head>
+<body>
+  <div class="bench">
+    <div class="bar" id="bar"></div>
+    <div id="out"></div>
+  </div>
+  <script type="module">
+    // ?a=a06&step=2&mini=1&theme=dark&t=5   (t = freeze at that time and draw once)
+    // ?grid=1  all 22 drawings in mini mode
+    import { mount } from './js/engine/stage.js';
+    import { load, keyFor } from './js/anim/index.js';
+    import { ARTICLES } from './js/content.js';
+    import { esc } from './js/ui/blocks.js';
+    const q = new URLSearchParams(location.search);
+    const KEYS = /^(a(0[1-9]|1\d|2[0-2])|book|end|placeholder|sec-(intro|people|model|ai))$/;
+    const freezeAt = (v, d) => Math.min(60, Math.max(0, Number.isFinite(+v) && v !== null ? +v : d));
+    if (q.get('theme')) document.documentElement.dataset.theme = q.get('theme');
+    const out = document.getElementById('out');
+    const bar = document.getElementById('bar');
+    const secOf = (key) => {
+      const n = +key.replace(/\D/g, '');
+      if (key.startsWith('a')) return ARTICLES.find((a) => a.no === n)?.section;
+      if (key.startsWith('sec-')) return key.slice(4);
+      return 'people';
+    };
+    if (q.get('grid')) {
+      out.className = 'grid';
+      for (const a of ARTICLES) {
+        const tile = document.createElement('div');
+        tile.className = 'tile';
+        tile.dataset.sec = a.section;
+        tile.innerHTML = `<span>${keyFor(a.no)} ${esc(a.title)}</span><canvas></canvas>`;
+        out.append(tile);
+        const mod = await load(keyFor(a.no));
+        const st = mount(tile.querySelector('canvas'), mod.default, { section: a.section, mini: true, hoverOnly: true, stillT: freezeAt(q.get('t'), 3.5) });
+        tile.addEventListener('pointerenter', () => st.setHover(true));
+        tile.addEventListener('pointerleave', () => st.setHover(false));
+      }
+    } else {
+      const key = KEYS.test(q.get('a') || '') ? q.get('a') : 'a01';
+      out.className = 'one';
+      out.dataset.sec = secOf(key);
+      out.innerHTML = '<canvas></canvas>';
+      const mod = await load(key);
+      const data = { progress: +(q.get('p') || 0), article: ARTICLES.find((a) => keyFor(a.no) === key), k: +(q.get('k') || 0.5), read: new Set([1, 2, 3, 12]), open: (n) => console.log('open', n), hover: () => {} };
+      const st = mount(out.querySelector('canvas'), mod.default, { section: secOf(key), mini: !!q.get('mini'), step: +(q.get('step') || 0), data, stillT: freezeAt(q.get('t'), 4), hoverOnly: !!q.get('t') });
+      window.__stage = st;
+      bar.innerHTML = `<b>${esc(key)}</b> <span>${esc(mod.hint || '')}</span> ` + [0, 1, 2, 3, 4, 5].map((i) => `<button data-s="${i}">step ${i}</button>`).join('') + ' <input type="range" id="p" min="0" max="1" step="0.01" value="' + data.progress + '"> <span id="fps"></span>';
+      bar.querySelectorAll('[data-s]').forEach((b) => b.addEventListener('click', () => {
+        st.setStep(+b.dataset.s);
+        bar.querySelectorAll('[data-s]').forEach((x) => x.classList.toggle('on', x === b));
+      }));
+      bar.querySelector('#p').addEventListener('input', (e) => (data.progress = +e.target.value));
+      setInterval(() => (document.getElementById('fps').textContent = (window.__fps || '–') + ' fps'), 1000);
+    }
+  </script>
+</body>
+</html>
