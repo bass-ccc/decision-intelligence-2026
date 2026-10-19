@@ -1,4 +1,4 @@
-// The six Higgsfield films (Kling 3.0, from GPT Image 2.5 keyframes) and what the page does around them.
+// The five Higgsfield films — four chapters plus the explore map (Kling 3.0, from GPT Image 2.5 keyframes) — and what the page does around them.
 // All positions are in video space: x, y from 0 to 1, measured from the top-left of the 16:9 frame.
 
 export const SECTION_LOOK = {
