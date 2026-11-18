@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { rng, GLSL_NOISE, COLORS, FOG_ADD } from '../core/util.js';
+import { rng, clamp, GLSL_NOISE, COLORS, FOG_ADD } from '../core/util.js';
+import { coverFallback } from '../core/textures.js';
 import { ROOF, CANAL, BILL1, BILL2, COVER_HOLO } from './layout.js';
 
 // The city: one instanced mesh of towers whose windows are drawn per pixel,
@@ -172,6 +173,212 @@ export function holoMaterial(tex, rect, tint, gain, seed, ink = 1) {
   });
 }
 
+// A faint cone of projector light. The narrow end is at the top of the cylinder.
+function projectorBeam(tint, radius, height) {
+  return new THREE.Mesh(
+    new THREE.CylinderGeometry(0.3, radius, height, 24, 1, true),
+    new THREE.ShaderMaterial({
+      uniforms: fogUniforms({ uTint: { value: new THREE.Color(tint) } }),
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      fog: true,
+      vertexShader: `varying vec2 vUv;\n#include <fog_pars_vertex>\nvoid main(){ vUv = uv; vec4 mvPosition = modelViewMatrix * vec4(position,1.0); gl_Position = projectionMatrix * mvPosition;\n#include <fog_vertex>\n}`,
+      fragmentShader: `uniform vec3 uTint; uniform float uTime; uniform float uDawn; varying vec2 vUv;\n#include <fog_pars_fragment>\nvoid main(){ float a = pow(1.0 - vUv.y, 1.5) * 0.022 * (0.8 + 0.2 * sin(vUv.x * 60.0 + uTime * 2.0)); gl_FragColor = vec4(uTint * a * (1.0 - uDawn), 1.0);\n${FOG_ADD}\n}`,
+    })
+  );
+}
+
+// ---------------------------------------------------------------- the book over the canal
+// The real book, solid: kraft cover, spine, the cream edge of its pages. It is opaque on purpose.
+// As a glowing picture on black it had no outline and no thickness, the towers showed through it,
+// and it read as a projected poster. It is lit by its own key and rim in the shader (the scene's
+// light count never changes), and kept well under the bloom threshold so the cover stays readable;
+// only the foil title and the corner marks are allowed to glow.
+const BOOK = { h: 30, w: (30 * 600) / 811, thick: 2.6, real: (30 * 34) / 811 };
+
+const BOOK_VERT = /* glsl */ `
+varying vec2 vUv; varying vec3 vN; varying vec3 vNW; varying vec3 vObj; varying vec3 vW;
+#include <fog_pars_vertex>
+void main() {
+  vUv = uv;
+  vN = normal;
+  vObj = position;
+  vNW = normalize(mat3(modelMatrix) * normal);
+  vec4 wp = modelMatrix * vec4(position, 1.0);
+  vW = wp.xyz;
+  vec4 mvPosition = viewMatrix * wp;
+  gl_Position = projectionMatrix * mvPosition;
+  #include <fog_vertex>
+}`;
+
+const BOOK_FRAG = /* glsl */ `
+uniform sampler2D tFront; uniform sampler2D tBack; uniform sampler2D tSpine;
+uniform vec3 uSize; uniform float uSpineK; uniform vec3 uKeyDir; uniform vec3 uRimDir;
+uniform float uTime; uniform float uDawn; uniform vec3 uDawnDir;
+varying vec2 vUv; varying vec3 vN; varying vec3 vNW; varying vec3 vObj; varying vec3 vW;
+#include <fog_pars_fragment>
+void main() {
+  vec3 n = normalize(vN);
+  vec3 nW = normalize(vNW);
+  vec3 V = normalize(cameraPosition - vW);
+  // every scan is read before the faces are told apart, so mip selection stays defined at the edges
+  vec3 cF = texture2D(tFront, vUv).rgb;
+  vec3 cB = texture2D(tBack, vUv).rgb;
+  // The spine scan is narrower than this face, so its edges are stretched to fill it. They are
+  // clamped well inside the scan: its last pixel column carries the edge of the front cover's
+  // drawing, and stretched it becomes a dark streaky band.
+  vec3 cS = texture2D(tSpine, vec2(clamp((vUv.x - 0.5) * uSpineK + 0.5, 0.19, 0.81), vUv.y)).rgb;
+  float isF = step(0.5, n.z);
+  float isB = step(0.5, -n.z);
+  float isS = step(0.5, -n.x);
+  float isCover = isF + isB + isS;
+  // top, bottom and fore-edge: a block of pages between two cover boards
+  float w = vObj.z / uSize.z + 0.5;
+  float f = w * 11.0;
+  float line = mix(0.5 + 0.5 * sin(f * 6.2832), 0.5, smoothstep(0.25, 0.6, fwidth(f)));
+  vec3 pages = vec3(0.79, 0.75, 0.66) * (0.80 + 0.20 * line) * (0.75 + 0.25 * smoothstep(0.045, 0.16, min(w, 1.0 - w)));
+  pages = mix(pages, vec3(0.50, 0.37, 0.25), step(w, 0.045) + step(0.955, w));
+  vec3 alb = cF * isF + cB * isB + cS * isS + pages * (1.0 - isCover);
+  // worn edges on the boards
+  vec2 e = min(vUv, 1.0 - vUv) * vec2(uSize.x / uSize.y, 1.0);
+  alb *= mix(1.0, 0.74 + 0.26 * smoothstep(0.0, 0.014, min(e.x, e.y)), isF + isB);
+  // the foil title (bluer than kraft, bottom of the cover) and the white 2026 (top of the cover)
+  float foil = isF * smoothstep(0.02, 0.14, cF.b - cF.r * 0.92) * (1.0 - smoothstep(0.175, 0.195, vUv.y));
+  float white = isF * smoothstep(0.55, 0.85, min(cF.r, min(cF.g, cF.b))) * step(0.70, vUv.y);
+
+  // night: a warm projector from below and in front, a cold rim from the sky, the city's bounce
+  float pool = 1.0 - 0.40 * isCover * smoothstep(0.22, 0.80, length((vUv - vec2(0.5, 0.42)) * vec2(1.0, 0.85)));
+  vec3 amb = mix(vec3(0.165, 0.09, 0.145), vec3(0.055, 0.09, 0.11), 0.5 + 0.5 * nW.y);
+  vec3 night = alb * (vec3(1.0, 0.93, 0.84) * 0.80 * max(dot(nW, uKeyDir), 0.0) * pool
+                    + vec3(0.55, 0.85, 0.95) * 0.50 * max(dot(nW, uRimDir), 0.0) + amb);
+  night += vec3(0.25, 0.85, 0.80) * 0.06 * pow(1.0 - max(dot(nW, V), 0.0), 3.0);
+  // a scan line climbs it every 12 s: it is still something projected into the sky
+  float sy = fract(uTime * 0.085) * 1.5 - 0.25;
+  night += vec3(0.35, 1.0, 0.92) * 0.55 * smoothstep(0.012, 0.0, abs(vObj.y / uSize.y + 0.5 - sy));
+  // the foil catches a moving glint; this is the one part that is meant to bloom
+  float sheen = smoothstep(0.10, 0.0, abs(fract((vUv.x + vUv.y * 0.6) * 0.5 - uTime * 0.07) - 0.5));
+  vec3 glow = cF / max(max(cF.r, cF.g), max(cF.b, 0.001)) * foil * (0.62 + 0.55 * sheen) + vec3(0.20) * white;
+
+  // dawn: the projector is off; real sun on the back, and (as on the towers) on faces that look at the roof
+  float sun = max(dot(nW, uDawnDir), 0.0) + 0.9 * max(dot(nW, uDawnDir * vec3(-1.0, 1.0, -1.0)), 0.0);
+  vec3 day = alb * (vec3(0.30, 0.29, 0.33) + vec3(0.78, 0.56, 0.46) * sun);
+
+  gl_FragColor = vec4(mix(night + glow, day + glow * 0.15, uDawn), 1.0);
+  #include <fog_fragment>
+}`;
+
+// Four corner marks and a ruler around the book: what is left of the hologram.
+const BOOK_FRAME_FRAG = /* glsl */ `
+uniform vec2 uPlane; uniform vec2 uBox; uniform float uBookH; uniform vec3 uTint; uniform float uTicks;
+uniform float uTime; uniform float uDawn;
+varying vec2 vUv;
+#include <fog_pars_fragment>
+void main() {
+  vec2 p = (vUv - 0.5) * uPlane;
+  vec2 q = abs(p) - uBox * 0.5;
+  vec2 c = uBox * 0.5 - abs(p);
+  float bracket = (1.0 - smoothstep(0.05, 0.20, abs(max(q.x, q.y)))) * step(max(c.x, c.y), 3.4);
+  float tx = -p.x - uBox.x * 0.5; // a ruler outside the left side
+  float tick = step(0.35, tx) * step(tx, 0.95) * step(abs(p.y), uBox.y * 0.5 - 3.8)
+             * (1.0 - smoothstep(0.05, 0.11, abs(fract(p.y / 1.5) - 0.5) * 1.5)) * uTicks;
+  float sy = (fract(uTime * 0.085) * 1.5 - 0.75) * uBookH; // rides up with the book's scan line
+  float mark = step(0.35, tx) * step(tx, 1.7) * (1.0 - smoothstep(0.06, 0.16, abs(p.y - sy)));
+  gl_FragColor = vec4(uTint * (bracket * 1.3 + tick * 0.45 + mark) * (1.0 - uDawn), 1.0);
+  ${FOG_ADD}
+}`;
+
+function buildBook(frontTex, tier) {
+  const kraft = new THREE.DataTexture(new Uint8Array([219, 196, 170, 255]), 1, 1);
+  kraft.colorSpace = THREE.SRGBColorSpace;
+  kraft.needsUpdate = true;
+
+  // rig: where the book hangs, turned to face the opening camera. Never scaled.
+  const rig = new THREE.Group();
+  rig.name = 'bookRig';
+  rig.position.copy(COVER_HOLO);
+  const to = new THREE.Vector3(-20.6, COVER_HOLO.y + 6, 52.6).sub(COVER_HOLO);
+  rig.rotation.y = Math.atan2(to.x, to.z);
+  rig.updateMatrixWorld();
+  const rigRight = new THREE.Vector3(1, 0, 0).applyQuaternion(rig.quaternion);
+
+  // a shaft of light up from the canal: narrow at the water, wide at the book
+  const beam = projectorBeam('#ffe9cf', 9, 70);
+  beam.rotation.x = Math.PI;
+  beam.position.y = -35;
+  rig.add(beam);
+
+  // pivot: bobbing and the phone fit; the frame hangs still on it while the book sways inside
+  const pivot = new THREE.Group();
+  rig.add(pivot);
+
+  const frameMat = new THREE.ShaderMaterial({
+    uniforms: fogUniforms({
+      uPlane: { value: new THREE.Vector2(BOOK.w + 7, BOOK.h + 5) },
+      uBox: { value: new THREE.Vector2(BOOK.w + 3, BOOK.h + 3) },
+      uBookH: { value: BOOK.h },
+      uTint: { value: new THREE.Color('#9ff7ff') },
+      uTicks: { value: tier.mobile ? 0 : 1 },
+    }),
+    vertexShader: HOLO_VERT,
+    fragmentShader: BOOK_FRAME_FRAG,
+    fog: true,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  pivot.add(new THREE.Mesh(new THREE.PlaneGeometry(BOOK.w + 7, BOOK.h + 5), frameMat));
+
+  const mat = new THREE.ShaderMaterial({
+    uniforms: fogUniforms({
+      tFront: { value: frontTex || coverFallback() },
+      tBack: { value: kraft },
+      tSpine: { value: kraft },
+      uSize: { value: new THREE.Vector3(BOOK.w, BOOK.h, BOOK.thick) },
+      uSpineK: { value: BOOK.thick / BOOK.real },
+      uKeyDir: { value: new THREE.Vector3(-0.1, -0.4, 0.91).normalize().applyQuaternion(rig.quaternion) },
+      uRimDir: { value: new THREE.Vector3(0.45, 0.8, -0.25).normalize().applyQuaternion(rig.quaternion) },
+    }),
+    vertexShader: BOOK_VERT,
+    fragmentShader: BOOK_FRAG,
+    fog: true,
+  });
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(BOOK.w, BOOK.h, BOOK.thick), mat);
+  mesh.name = 'book';
+  pivot.add(mesh);
+
+  // With "reduce motion" on, the sway is halved, not removed: it is a slow 16 s swing, the camera
+  // flights around it are far larger, and without it the spine never shows and the book is a slab.
+  const a = tier.reduced ? 0.5 : 1;
+  const api = {
+    rig,
+    mesh,
+    // a sway, never a spin: the front cover always stays readable from the roof
+    update(t) {
+      pivot.position.y = a * 0.45 * Math.sin(t * 0.5);
+      mesh.rotation.set(0.07, 0.06 + 0.46 * a * Math.sin(t * 0.4), 0.035 + a * 0.012 * Math.sin(t * 0.33 + 1.3));
+    },
+    // tall phone screens crop the right of the cover: make it smaller and pull it in
+    fit(aspect) {
+      // starts early (a phone browser with its toolbars showing is about 0.59 wide to tall)
+      const k = clamp((0.72 - aspect) / 0.26, 0, 1);
+      pivot.scale.setScalar(1 - 0.28 * k);
+      rig.position.copy(COVER_HOLO).addScaledVector(rigRight, -4 * k);
+      rig.position.y += 2.5 * k;
+    },
+    // the back and the spine arrive after the reader is already in; until then they are plain kraft
+    setMaps({ front, back, spine } = {}) {
+      if (front) mat.uniforms.tFront.value = front;
+      if (back) mat.uniforms.tBack.value = back;
+      if (spine) mat.uniforms.tSpine.value = spine;
+    },
+  };
+  api.update(0);
+  return api;
+}
+
 export function atlasRect(atlas, page) {
   const i = page - 1;
   const col = i % atlas.cols;
@@ -341,43 +548,25 @@ export function buildCity({ tier, atlasTex, atlas, openerTex, coverTex }) {
     pl.rotation.y = Math.atan2(to.x, to.z);
     group.add(pl);
     // projector beam from the tower roof
-    const beam = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.3, H * 0.45, 40, 24, 1, true),
-      new THREE.ShaderMaterial({
-        uniforms: fogUniforms({ uTint: { value: new THREE.Color(tint) } }),
-        transparent: true,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-        fog: true,
-        vertexShader: `varying vec2 vUv;\n#include <fog_pars_vertex>\nvoid main(){ vUv = uv; vec4 mvPosition = modelViewMatrix * vec4(position,1.0); gl_Position = projectionMatrix * mvPosition;\n#include <fog_vertex>\n}`,
-        fragmentShader: `uniform vec3 uTint; uniform float uTime; uniform float uDawn; varying vec2 vUv;\n#include <fog_pars_fragment>\nvoid main(){ float a = pow(1.0 - vUv.y, 1.5) * 0.022 * (0.8 + 0.2 * sin(vUv.x * 60.0 + uTime * 2.0)); gl_FragColor = vec4(uTint * a * (1.0 - uDawn), 1.0);\n${FOG_ADD}\n}`,
-      })
-    );
+    const beam = projectorBeam(tint, H * 0.45, 40);
     beam.position.copy(pos).add(new THREE.Vector3(0, 24, 0));
     group.add(beam);
     billboards.push({ plane: pl, mat });
   });
 
-  // --- the book itself: its real cover as the city's biggest hologram.
-  // The jacket's chimp is half pencil, half ASCII — a ghost half-way into its shell.
-  if (coverTex) {
-    const ch = 30;
-    const cm = holoMaterial(coverTex, [0, 0, 1, 1], '#eaf8ff', 1.05, 0.71, 0);
-    const cover = new THREE.Mesh(new THREE.PlaneGeometry(ch * 0.74, ch), cm);
-    cover.position.copy(COVER_HOLO);
-    const to = new THREE.Vector3(-20.6, COVER_HOLO.y + 6, 52.6).sub(COVER_HOLO);
-    cover.rotation.y = Math.atan2(to.x, to.z);
-    group.add(cover);
-    billboards.push({ plane: cover, mat: cm });
-  }
+  // --- the book itself, solid, hanging over the canal (built even if its cover failed to load)
+  const book = buildBook(coverTex, tier);
+  group.add(book.rig);
 
   return {
     group,
     boxes,
     billboards,
+    book,
+    fit: book.fit,
     update(t, env) {
       group.visible = env.cityVis;
+      if (group.visible) book.update(t);
     },
   };
 }

@@ -42,7 +42,9 @@ function st(no, chapter, anchor, cam, look) {
   return { no, chapter, anchor, cam, look: look || anchor.clone() };
 }
 
-export function stations() {
+// portrait: on a tall phone screen the article card covers the lower half, so the six stops
+// around the head step back and look lower, which lifts the head into the half that is free.
+export function stations({ portrait = false } = {}) {
   const list = [];
   list.push(st(1, 'intro', BILL1.clone(), V(-12, 93, 60), BILL1.clone().add(V(0, -1, 0))));
   list.push(st(2, 'intro', BILL2.clone(), V(-26, 93.4, 54), BILL2.clone().add(V(0, -1, 0))));
@@ -60,12 +62,26 @@ export function stations() {
   const H = HEAD;
   const S = HEAD_S;
   const hp = (x, y, z) => V(H.x + x * S, H.y + y * S, H.z + z * S);
-  list.push(st(17, 'ai', hp(0, 0.1, 0.9), hp(0.55, 0.2, 2.6), hp(0.06, 0.08, 0.8)));
-  list.push(st(18, 'ai', hp(-0.75, 0.25, 0.1), hp(-2.9, 0.4, 0.35), hp(-0.2, 0.15, 0.1)));
-  list.push(st(19, 'ai', hp(0.1, -0.2, 1.0), hp(1.4, 0.0, 2.3), hp(0.05, -0.1, 0.8)));
-  list.push(st(20, 'ai', hp(0.75, 0.3, -0.3), hp(2.7, 0.1, -1.5), hp(0.2, 0.1, -0.2)));
-  list.push(st(21, 'ai', hp(0, -0.49, 0.95), hp(-0.9, -0.75, 2.3), hp(0, -0.5, 0.8)));
-  list.push(st(22, 'ai', hp(0, 1.25, 0), hp(0.2, 3.2, 2.2), hp(0, 0.6, 0)));
+  // [anchor, camera, look, portrait pull, portrait drop]
+  const head = [
+    [17, hp(0, 0.1, 0.9), hp(0.55, 0.2, 2.6), hp(0.06, 0.08, 0.8), 1.25, 0.3],
+    [18, hp(-0.75, 0.25, 0.1), hp(-2.9, 0.4, 0.35), hp(-0.2, 0.15, 0.1), 1.75, 0.8],
+    [19, hp(0.1, -0.2, 1.0), hp(1.7, 0.05, 2.8), hp(0.05, -0.05, 0.75), 1.5, 0.62],
+    // 20: from behind the ear, so the skin wraps toward the reader and the profile stays in view
+    [20, hp(0.75, 0.3, -0.3), hp(2.85, 0.2, -0.8), hp(0.2, 0.05, -0.15), 1.75, 0.8],
+    // 21: low, on the mouth, far enough back that lips and jaw read as a face and not as boxes
+    [21, hp(0, -0.49, 0.95), hp(0.85, -1.05, 3.1), hp(0, -0.42, 0.7), 1.2, 0.4],
+    // 22: low three-quarter, looking up at the whole head under its four locks
+    // (from straight above, where this stop used to be, a head is an egg)
+    [22, hp(0, 1.25, 0), hp(-1.45, -0.62, 3.15), hp(0, 0.32, 0.1), 1.55, 1.0],
+  ];
+  for (const [no, anchor, cam, look, pull, drop] of head) {
+    if (portrait) {
+      look.y -= drop * S;
+      cam.sub(look).multiplyScalar(pull).add(look);
+    }
+    list.push(st(no, 'ai', anchor, cam, look));
+  }
   return list;
 }
 

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { ARTICLES } from '../../assets/js/data.js';
 import { Stage } from './core/stage.js';
 import { Tour } from './core/tour.js';
+import { createWheelStepper } from './core/wheel.js';
 import { tier as detectTier, clamp, smooth, lerp, damp, frame as nextFrame } from './core/util.js';
 import { DAWN_DIR, stations as buildStations, tourKeys } from './world/layout.js';
 import { buildSky } from './world/sky.js';
@@ -9,7 +10,7 @@ import { buildCity, shared } from './world/city.js';
 import { buildCanal, SIGN_TEXT } from './world/canal.js';
 import { buildRain } from './world/rain.js';
 import { buildSea } from './world/sea.js';
-import { buildNet, computeShell } from './world/net.js';
+import { buildNet } from './world/net.js';
 import { buildThreads } from './world/threads.js';
 import { UI } from './ui/ui.js';
 import { ghostPrint } from './ui/print.js';
@@ -46,9 +47,6 @@ async function boot() {
   camera.layers.enable(1);
   await step(0.08, null, stage.tier.weak ? 'OK · 省電模式' : 'OK');
 
-  // heavy maths off the main thread right away
-  const shellP = computeShell(T.voxel);
-
   await step(0.12, '載入 196 頁與字型', '…');
   const tl = new THREE.TextureLoader();
   const loadTex = async (url) => {
@@ -62,7 +60,7 @@ async function boot() {
     fetch('../assets/img/atlas.json').then((r) => r.json()),
     loadTex('../assets/img/openers/p006.jpg'),
     loadTex('../assets/img/openers/p012.jpg'),
-    loadTex('../assets/img/cover/front-holo.png').catch(() => null),
+    loadTex('../assets/img/cover/front.jpg').catch(() => null),
     Promise.all([
       document.fonts.load('900 40px "Noto Sans TC"', CANVAS_TEXT),
       document.fonts.load('700 40px "Noto Sans TC"', CANVAS_TEXT),
@@ -102,13 +100,17 @@ async function boot() {
   scene.add(sea.group, sea.snow, sea.bergHolder);
   await step(0.68, null, 'OK');
 
-  await step(0.7, '深網 · 組裝義體', '…');
-  const shell = await shellP;
-  const net = buildNet({ tier: T, shell });
+  await step(0.7, '深網 · 佈線', '…');
+  const net = buildNet({ tier: T });
   scene.add(net.group);
-  await step(0.8, null, `${net.count.toLocaleString()} 塊`);
+  await step(0.8, null, 'OK');
 
-  const sts = buildStations();
+  // Where the article card sits at the bottom (the same 820px rule as shell.css) it covers the lower
+  // half, and on any tall screen the head is too wide for the frame: there the stops around the head
+  // use cameras that stand further back and look lower. Checked again whenever the window changes.
+  const tall = () => window.matchMedia('(max-width: 820px)').matches || window.innerWidth / window.innerHeight < 0.8;
+  let portrait = tall();
+  const sts = buildStations({ portrait });
   const keys = tourKeys(sts);
   const tour = new Tour(keys);
   const threads = buildThreads(sts);
@@ -140,19 +142,24 @@ async function boot() {
     lastKey: -1,
     dwell: 0,
     camo: 1,
+    coach: false,
   };
 
   const actions = {
     goKey: (k) => {
       if (S.hero) enter(false);
+      endCoach();
+      wheelSteps.reset();
       tour.goKey(k);
     },
     goStation: (no) => {
       if (S.hero) enter(false);
+      endCoach();
+      wheelSteps.reset();
       tour.goKey(keyOf(no));
     },
-    next: () => (S.hero ? enter(true) : tour.next()),
-    prev: () => tour.prev(),
+    next: () => stepTour(1),
+    prev: () => stepTour(-1),
     home: () => goHome(),
     again: () => goHome(),
     toggleSound: () => {
@@ -200,17 +207,46 @@ async function boot() {
   ui.buildGauge(keys, tour.stops);
   ui.buildLabels(sts);
 
+  // phones and tablets get their own words: there is no wheel and no space bar to hold
+  const isTouch = () => window.matchMedia('(hover: none) and (pointer: coarse)').matches;
   function enter(fly = true) {
-    if (!S.hero) return;
+    if (!S.hero || body.classList.contains('is-loading')) return;
     S.hero = false;
     body.classList.add('in-world');
     sound.start();
     sound.whoosh();
     if (fly) tour.tween(1, 2.6);
-    setTimeout(() => ui.toast('滾動往下潛 · 拖曳環顧 · 按住空白鍵開啟魂視'), 1400);
+    // the how-to stays on screen until the reader has taken one step, not for a fixed few seconds
+    S.coach = fly;
+    if (fly) setTimeout(() => S.coach && ui.toast(isTouch() ? '往上滑，潛到下一篇' : '滾動滑鼠，潛到下一篇 · 拖曳可以環顧', 60000), 1400);
+  }
+  function endCoach() {
+    if (!S.coach) return;
+    S.coach = false;
+    ui.hideToast();
+  }
+  // One step along the dive line. Wheel, swipe, keys and buttons all end up here,
+  // so one gesture is always exactly one stop.
+  function stepTour(dir) {
+    if (S.hero) {
+      if (dir > 0) enter(true);
+      return;
+    }
+    // the jump off the roof always lands: the tail of the gesture that started it must not push on
+    if (dir > 0 && tour.tw && tour.tw.to === tour.stops[1] && tour.tw.t < tour.tw.dur * 0.8) return;
+    // the first article is the top of the dive; the cover is one tap away on the logo
+    if (dir < 0 && tour.nearestStop(tour.target) <= tour.stops[1]) return;
+    endCoach();
+    if (dir > 0) tour.next();
+    else tour.prev();
   }
   function goHome() {
     ui.closePanels(true);
+    // closePanels(true) is silent, so the "a panel is open" flag is cleared here; left set, it
+    // would keep wheel, keys and swipes switched off on the cover
+    S.panel = false;
+    endCoach();
+    wheelSteps.reset();
     ui.showFinale(false);
     if (S.ghostOn) actions.toggleGhost(false);
     sea.setMode(null);
@@ -223,17 +259,37 @@ async function boot() {
 
   // ------------------------------------------------------------------ input
   const canvas = $('#gl');
+  const finaleEl = $('#finale');
+  // panels that scroll by themselves keep their own wheel and swipes; everything else dives
+  const ownScroll = (t) => !!t.closest?.('#digest,#index,#reader,#ghost') || (!!t.closest?.('#finale') && finaleEl.scrollHeight > finaleEl.clientHeight + 1);
+
+  // Stretches in which no frame was drawn (a shader compiling, a resize, a busy GPU). The wheel
+  // logic needs them: a page that froze is not a reader who paused. Filled in by loop().
+  let frameAt = performance.now();
+  const hitches = []; // [from, to] on the performance.now() timeline
+  const frozenIn = (from, to) => {
+    const p = performance.now();
+    let f = 0;
+    let end = -Infinity;
+    for (const h of hitches) {
+      f += Math.max(0, Math.min(to, h[1]) - Math.max(from, h[0]));
+      end = h[1];
+    }
+    // a freeze that is still going on
+    if (p - frameAt > 100) f += Math.max(0, Math.min(to, p) - Math.max(from, frameAt, end));
+    return f;
+  };
+  document.addEventListener('visibilitychange', () => (frameAt = performance.now()));
+
+  // One wheel gesture = one stop: see core/wheel.js for how a gesture is told apart.
+  const wheelSteps = createWheelStepper({ step: stepTour, blocked: () => S.panel, frozenIn });
   window.addEventListener(
     'wheel',
     (e) => {
-      if (S.panel || e.target.closest('#digest,#index,#reader,#ghost,#card,#finale')) return;
+      if (e.ctrlKey || S.panel || ownScroll(e.target)) return;
       e.preventDefault();
-      if (S.hero) {
-        if (e.deltaY > 0) enter(true);
-        return;
-      }
-      const d = e.deltaMode === 1 ? e.deltaY * 40 : e.deltaY;
-      tour.nudge(clamp(d, -160, 160) * 0.0024);
+      const d = e.deltaMode === 1 ? e.deltaY * 40 : e.deltaMode === 2 ? e.deltaY * window.innerHeight : e.deltaY;
+      if (d) wheelSteps.wheel(d, e.timeStamp || performance.now(), e.deltaMode === 1);
     },
     { passive: false }
   );
@@ -265,28 +321,20 @@ async function boot() {
       sound.ghost(false);
     }
   });
-  // drag to look around; on touch, vertical swipes dive
+  // mouse: drag on the scene to look around
+  const lookBy = (g, dx, dy) => {
+    S.yawT = clamp(g.yaw - dx * 0.0032, -0.75, 0.75);
+    S.pitchT = clamp(g.pitch - dy * 0.0026, -0.42, 0.42);
+  };
   let drag = null;
   canvas.addEventListener('pointerdown', (e) => {
-    drag = { x: e.clientX, y: e.clientY, yaw: S.yawT, pitch: S.pitchT, touch: e.pointerType === 'touch', moved: 0, t: performance.now() };
+    if (e.pointerType !== 'mouse') return;
+    drag = { x: e.clientX, y: e.clientY, yaw: S.yawT, pitch: S.pitchT };
     canvas.setPointerCapture(e.pointerId);
     canvas.classList.add('dragging');
   });
   canvas.addEventListener('pointermove', (e) => {
-    if (!drag) return;
-    const dx = e.clientX - drag.x;
-    const dy = e.clientY - drag.y;
-    drag.moved = Math.max(drag.moved, Math.hypot(dx, dy));
-    if (drag.touch && Math.abs(dy) > Math.abs(dx) * 1.2) {
-      if (S.hero) {
-        if (dy < -40) enter(true);
-        return;
-      }
-      tour.nudge(-(e.movementY || 0) * 0.012);
-      return;
-    }
-    S.yawT = clamp(drag.yaw - dx * 0.0032, -0.75, 0.75);
-    S.pitchT = clamp(drag.pitch - dy * 0.0026, -0.42, 0.42);
+    if (drag) lookBy(drag, e.clientX - drag.x, e.clientY - drag.y);
   });
   const endDrag = () => {
     drag = null;
@@ -294,6 +342,79 @@ async function boot() {
   };
   canvas.addEventListener('pointerup', endDrag);
   canvas.addEventListener('pointercancel', endDrag);
+
+  // touch and pen: one swipe = one stop, started anywhere that does not scroll by itself
+  // (the card included: on a phone it fills the thumb's half of the screen).
+  // The first 12 px decide what the finger is doing: up / down dives, sideways looks around.
+  // Positions are tracked here by hand; movementY is not reliable for touch on every browser.
+  let sw = null;
+  let eatClick = 0;
+  window.addEventListener('pointerdown', (e) => {
+    eatClick = 0;
+    if (e.pointerType === 'mouse') return;
+    if (!e.isPrimary) {
+      // a second finger: this is a pinch, not a swipe, and it must not turn into a step
+      if (sw && sw.axis === 'y') tour.release();
+      sw = null;
+      return;
+    }
+    sw = null;
+    if (S.panel || ownScroll(e.target)) return;
+    sw = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), axis: '', look: e.target === canvas, yaw: S.yawT, pitch: S.pitchT, done: false, reach: 0 };
+  });
+  window.addEventListener('pointermove', (e) => {
+    if (!sw || e.pointerId !== sw.id) return;
+    const dx = e.clientX - sw.x;
+    const dy = e.clientY - sw.y;
+    if (!sw.axis) {
+      if (Math.hypot(dx, dy) < 12) return;
+      sw.axis = Math.abs(dy) >= Math.abs(dx) ? 'y' : 'x';
+    }
+    if (sw.axis === 'x') {
+      if (sw.look) lookBy(sw, dx, dy);
+      return;
+    }
+    sw.reach = Math.max(sw.reach, Math.abs(dy));
+    if (sw.done) return;
+    if (S.hero) {
+      if (dy < -40) {
+        sw.done = true;
+        enter(true);
+      }
+      return;
+    }
+    // lean with the finger, but never far enough to leave the stop
+    tour.peek(clamp(-dy / 500, -0.2, 0.2));
+  });
+  const endSwipe = (e) => {
+    if (!sw || e.pointerId !== sw.id) return;
+    const g = sw;
+    sw = null;
+    // An up / down swipe is never also a tap: if it began on a button, the click that some
+    // browsers still send afterwards is dropped (see the click listener below). 24 px is the
+    // shortest travel that can be a step; a thumb that only rolled less than that still taps.
+    const reach = Math.max(g.reach, Math.abs(e.clientY - g.y));
+    if (g.axis === 'y' && (g.done || reach >= 24)) eatClick = performance.now() + 400;
+    if (g.axis !== 'y' || g.done || S.hero) return;
+    const dy = e.clientY - g.y;
+    const ms = Math.max(1, performance.now() - g.t);
+    // far enough, or short but quick (a flick)
+    const far = Math.abs(dy) >= 56 || (Math.abs(dy) >= 24 && Math.abs(dy) / ms > 0.45);
+    tour.release();
+    if (e.type === 'pointerup' && far) stepTour(dy < 0 ? 1 : -1);
+  };
+  window.addEventListener('pointerup', endSwipe);
+  window.addEventListener('pointercancel', endSwipe);
+  window.addEventListener(
+    'click',
+    (e) => {
+      if (performance.now() >= eatClick) return;
+      eatClick = 0;
+      e.stopPropagation();
+      e.preventDefault();
+    },
+    true
+  );
 
   // ------------------------------------------------------------------ resize
   const W = () => window.innerWidth;
@@ -306,8 +427,19 @@ async function boot() {
   stage.onResize = (w, h) => {
     canal.resize(stage.W, stage.H);
     setPx();
+    city.fit(w / h);
+    // a phone turned on its side (or a window dragged narrow): move the head's cameras to the
+    // set made for that shape. The dive line reads these same vectors, so it follows at once.
+    if (tall() !== portrait) {
+      portrait = !portrait;
+      tourKeys(buildStations({ portrait })).forEach((k, i) => {
+        keys[i].cam.copy(k.cam);
+        keys[i].look.copy(k.look);
+      });
+    }
   };
   setPx();
+  city.fit(W() / H());
 
   // ------------------------------------------------------------------ environment by depth
   const col = {
@@ -385,6 +517,13 @@ async function boot() {
 
   function loop() {
     requestAnimationFrame(loop);
+    // note every stretch without a frame, for the wheel logic (see frozenIn)
+    const p = performance.now();
+    if (p - frameAt > 100) {
+      hitches.push([frameAt, p]);
+      if (hitches.length > 4) hitches.shift();
+    }
+    frameAt = p;
     const rawDt = clock.getDelta();
     // window.__manual hands the clock to a recorder that steps one exact frame at a time
     if (window.__manual) return;
@@ -459,7 +598,11 @@ async function boot() {
     const dawn = tour.param('dawn', 0);
     computeEnv(y, dawn);
     const netProg = clamp(tour.s - (gateAI + 1), 0, 6);
-    env.awake = smooth(k22, k22 + 1.2, tour.s) * (1 - smooth(k22 + 1.2, k22 + 3, tour.s));
+    // The shell wakes as the reader leaves it. This has to happen in the first second of the
+    // surfacing flight: after about 1.5 s the head has already slid out of the frame.
+    // Only a real departure counts (the dive line is headed past the stop): a finger that leans
+    // on the stop and lets go must not wake the head and drop it again.
+    env.awake = tour.settled > k22 ? smooth(k22 + 0.002, k22 + 0.04, tour.s) : 0;
 
     // crossings: the water line, the Net
     if ((S.prevY > 0) !== (y > 0) && !S.hero) {
@@ -494,7 +637,7 @@ async function boot() {
     canal.update(t, env);
     rain.update(t, env);
     sea.update(t, dt, env, activeNo);
-    net.update(t, dt, env, netProg, activeNo);
+    net.update(t, dt, env, netProg, activeNo, camera);
     threads.update(t, dt, S.ghost);
     hemi.intensity = lerp(lerp(0.9, 1.6, env.dawn), 0.7, env.u);
     keyLight.intensity = lerp(1.1, 0.9, env.u) + env.dawn * 1.2;
@@ -535,12 +678,17 @@ async function boot() {
   }
 
   await step(1, '同步完成', '22 個魂');
-  window.__shell = { tour, stage, keys, sts, seen, S, sea, net, ui, actions, bootMs: Math.round(performance.now()) };
+  window.__shell = { tour, stage, keys, sts, seen, S, sea, net, city, ui, actions, bootMs: Math.round(performance.now()) };
   setTimeout(() => {
     body.classList.remove('is-loading');
     $('#enter').disabled = false;
   }, 450);
   loop();
+  // the marble head lives in the last zone, minutes away for a reader who starts at the cover:
+  // it loads now, in the background. If it fails the Net simply has no head in it.
+  net.loadBust().catch((err) => console.warn('The head in the Net could not be loaded.', err));
+  // the back cover and the spine of the floating book are not needed to start: they come after
+  Promise.all([loadTex('../assets/img/cover/back.jpg').catch(() => null), loadTex('../assets/img/cover/spine.jpg').catch(() => null)]).then(([back, spine]) => city.book.setMaps({ back, spine }));
 }
 
 boot().catch((err) => {

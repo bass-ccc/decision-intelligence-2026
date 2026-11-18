@@ -44,7 +44,8 @@ void main() {
   float fl = 1.0;
   if (vFx.z > 0.5 && vFx.z < 1.5) fl = mix(0.15, 1.0, step(0.12, h1(floor(uTime * 9.0) + vFx.x * 91.0)));
   if (vFx.z > 1.5) fl = 0.85 + 0.15 * sin(uTime * 60.0 + vFx.x * 20.0);
-  float act = vFx.w > 0.5 ? 1.0 + 0.9 * step(abs(vFx.w - uActive), 0.1) * (0.8 + 0.2 * sin(uTime * 3.0)) : 1.0;
+  // the sign of the article being read is lifted a little, not flooded: it still has to be read
+  float act = vFx.w > 0.5 ? 1.0 + 0.25 * step(abs(vFx.w - uActive), 0.1) * (0.8 + 0.2 * sin(uTime * 3.0)) : 1.0;
   vec3 col = c * vFx.y * fl * act * (1.0 - uDawn * 0.55);
   gl_FragColor = vec4(col, 1.0);
   #include <fog_fragment>
@@ -291,7 +292,7 @@ export function buildCanal({ tier, boxes, W, H }) {
       m.compose(pos.set(x, p.y, p.z), q, sc.set(p.w, p.h, 1));
       faces.setMatrixAt(fi, m);
       rect.set(R, fi * 4);
-      fx.set([r(), 2.3, p.flick || 0, 0], fi * 4);
+      fx.set([r(), 1.9, p.flick || 0, 0], fi * 4);
       fi++;
       return;
     }
@@ -303,7 +304,9 @@ export function buildCanal({ tier, boxes, W, H }) {
       m.compose(pos.set(x, p.y, p.z + face * 0.16), q, sc.set(p.w, p.h, 1));
       faces.setMatrixAt(fi, m);
       rect.set(R, fi * 4);
-      fx.set([r(), p.no ? 2.6 : 2.3, p.flick || 0, p.no || 0], fi * 4);
+      // brightness: the bloom pass turns anything far above 1.1 into a wide haze, and a hazy sign
+      // cannot be read. The article signs (five dense characters) stay lower than the shop signs.
+      fx.set([r(), p.no ? 1.6 : 1.9, p.flick || 0, p.no || 0], fi * 4);
       fi++;
     }
     m.compose(pos.set(x, p.y, p.z), q.identity(), sc.set(p.w + 0.2, p.h + 0.2, 0.3));

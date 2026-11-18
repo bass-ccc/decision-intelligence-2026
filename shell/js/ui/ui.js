@@ -71,6 +71,7 @@ export class UI {
     wrap.replaceChildren();
     this.ticks = new Map();
     this.gaugeStops = stops;
+    this.keys = keys;
     stops.forEach((k, i) => {
       const key = keys[k];
       const el = document.createElement('button');
@@ -137,18 +138,27 @@ export class UI {
     const id = key ? key.kind + (key.no || key.chapter || '') : null;
     if (id === this.cardKey) return;
     this.cardKey = id;
+    this.holdStepFocus(this.card);
     this.card.classList.remove('show');
     this.card.setAttribute('aria-hidden', 'true');
+    this.card.inert = true;
+    document.body.classList.remove('card-up');
     clearTimeout(this._cardT);
     if (!key || key.kind !== 'station') return;
     this._cardT = setTimeout(() => {
       const a = ARTICLES.find((x) => x.no === key.no);
       const ch = CH[a.section];
       const pm = a.no === 12;
+      // what the stop before and after this one is, so the two step buttons can say where they go
+      const at = this.gaugeStops.indexOf(this.keys.indexOf(key));
+      const before = this.keys[this.gaugeStops[at - 1]];
+      const after = this.keys[this.gaugeStops[at + 1]];
+      const prevText = !before || before.kind === 'hero' ? '' : before.kind === 'gate' ? '↑ 章首' : '↑ 上一篇';
+      const nextText = !after ? '' : after.kind === 'finale' ? '浮出水面 ↑' : after.kind === 'gate' ? `下一章 · ${CH[after.chapter].place} ↓` : '下一篇 ↓';
       this.card.style.setProperty('--c', COLORS[a.section]);
       setMarkup(
         this.card,
-        `<div class="cd">
+        `<div class="cd${pm ? ' cd-tall' : ''}">
           <div class="cd-kick"><span><b>${ch.no} ${ch.name}</b> · ${pad2(a.no)} / 22</span><span>P.${pad3(a.start)}–${pad3(a.end)}</span></div>
           ${a.kicker ? `<span class="cd-special">〈${esc(a.kicker)}〉</span>` : ''}
           <h2 class="cd-title"></h2>
@@ -168,8 +178,13 @@ export class UI {
                 </div></div>`
               : ''
           }
+          <nav class="cd-nav" aria-label="上一站、下一站">
+            <button class="cd-step" data-step="-1"${prevText ? '' : ' disabled'}>${prevText || '↑'}</button>
+            <button class="cd-step next" data-step="1"${nextText ? '' : ' disabled'}>${nextText || '↓'}</button>
+          </nav>
         </div>`
       );
+      this.card.querySelectorAll('[data-step]').forEach((b) => (b.onclick = () => (b.dataset.step === '1' ? this.actions.next() : this.actions.prev())));
       decode(this.card.querySelector('.cd-title'), a.title);
       this.card.querySelector('[data-act="digest"]').onclick = () => this.openDigest(a.no);
       this.card.querySelector('[data-act="read"]').onclick = () => this.openReader(a.start, a.end, a.start, `${pad2(a.no)} ${a.title}`);
@@ -177,10 +192,28 @@ export class UI {
       const img = this.card.querySelector('.cd-thumb');
       img.onerror = () => img.remove();
       requestAnimationFrame(() => {
+        // the camera may already have moved on while this frame was waiting
+        if (this.cardKey !== id) return;
         this.card.classList.add('show');
         this.card.setAttribute('aria-hidden', 'false');
+        this.card.inert = false;
+        document.body.classList.add('card-up');
+        this.giveStepFocus(this.card.querySelector(`[data-step="${this._stepFocus}"]:not(:disabled)`));
       });
     }, 240);
+  }
+
+  // A hidden card or gate is made inert so its buttons cannot be reached while invisible. That drops
+  // the focus, so a reader who was stepping with a focused button gets it back on the next one.
+  holdStepFocus(el) {
+    const f = document.activeElement;
+    if (f && el.contains(f) && (f.dataset.step || f.classList.contains('gt-next'))) this._stepFocus = f.dataset.step || '1';
+  }
+
+  giveStepFocus(btn) {
+    const free = !document.activeElement || document.activeElement === document.body;
+    if (btn && this._stepFocus && free) btn.focus({ preventScroll: true });
+    this._stepFocus = null;
   }
 
   setPMButtons(mode) {
@@ -191,15 +224,17 @@ export class UI {
   showGate(chapter) {
     if (chapter === this.gateCh) return;
     this.gateCh = chapter;
+    this.holdStepFocus(this.gate);
     this.gate.classList.remove('show');
     this.gate.setAttribute('aria-hidden', chapter ? 'false' : 'true');
+    this.gate.inert = true;
     clearTimeout(this._gateT);
     if (!chapter) return;
     this._gateT = setTimeout(() => {
       const sec = SECTIONS.find((s) => s.id === chapter);
       const count = ARTICLES.filter((a) => a.section === chapter).length;
       const c = CH[chapter];
-      const hint = { people: '往下滾動，跳進運河 ↓', model: '往下滾動，潛入水中 ↓', ai: '往下滾動，連上深網 ↓' }[chapter];
+      const hint = { people: '跳進運河 ↓', model: '潛入水中 ↓', ai: '連上深網 ↓' }[chapter];
       setMarkup(
         this.gate,
         `<div class="gt" style="--c:${COLORS[chapter]}">
@@ -207,10 +242,17 @@ export class UI {
           <div class="gt-kick">CHAPTER ${sec.no} · ${c.en} · ${count} 篇觀點</div>
           <h2>${esc(c.place)}<small>${esc(c.name)} ${esc(c.zh)}</small></h2>
           <p>${esc(sec.lead)}</p>
-          <div class="gt-hint">${hint}</div>
+          <button class="gt-next">${hint}</button>
         </div>`
       );
-      requestAnimationFrame(() => this.gate.classList.add('show'));
+      this.gate.querySelector('.gt-next').onclick = () => this.actions.next();
+      requestAnimationFrame(() => {
+        // the camera may already have left the gate while this frame was waiting
+        if (this.gateCh !== chapter) return;
+        this.gate.classList.add('show');
+        this.gate.inert = false;
+        this.giveStepFocus(this._stepFocus === '1' ? this.gate.querySelector('.gt-next') : null);
+      });
     }, 150);
   }
 
@@ -491,6 +533,11 @@ export class UI {
     this.toastEl.classList.add('show');
     clearTimeout(this._toastT);
     this._toastT = setTimeout(() => this.toastEl.classList.remove('show'), ms);
+  }
+
+  hideToast() {
+    clearTimeout(this._toastT);
+    this.toastEl.classList.remove('show');
   }
 
   bind() {

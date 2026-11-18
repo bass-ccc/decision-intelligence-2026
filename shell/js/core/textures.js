@@ -97,15 +97,16 @@ export function fingerprintTexture() {
 // spec: { text, sub?, no?, color, w, h (metres), vertical, style }
 const PPM = 64; // pixels per metre
 
-function neonText(g, ch, x, y, size, color, weight = 900) {
+// The glow painted here is kept thin and the strokes medium weight: the bloom pass adds the
+// real halo, and a heavy face with a wide painted glow closes up dense characters (增, 構, 體)
+// into a bright blob once the sign is a few dozen pixels tall on screen.
+function neonText(g, ch, x, y, size, color, weight = 700) {
   g.font = `${weight} ${size}px "Noto Sans TC", sans-serif`;
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   g.shadowColor = color;
-  g.shadowBlur = size * 0.35;
+  g.shadowBlur = size * 0.14;
   g.fillStyle = color;
-  g.fillText(ch, x, y);
-  g.shadowBlur = size * 0.12;
   g.fillText(ch, x, y);
   g.shadowBlur = 0;
   g.fillStyle = 'rgba(255,255,255,0.78)';
@@ -190,6 +191,34 @@ export function signAtlas(specs) {
   for (const it of items) drawSign(g, it.s, it.x, it.y, it.w, it.h);
   const rects = items.map((it) => [it.x / W, 1 - (it.y + it.h) / H, it.w / W, it.h / H]);
   return { texture: canvasTexture(c), rects };
+}
+
+// ---------------------------------------------------------------- the book's cover, drawn by hand
+// Only used when the real cover image fails to load: kraft paper, the outlined year, the foil title.
+// Enough for the floating book to still be recognisably this book.
+export function coverFallback() {
+  const W = 300;
+  const H = 406;
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = H;
+  const g = c.getContext('2d');
+  g.fillStyle = '#dbc4aa';
+  g.fillRect(0, 0, W, H);
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.font = '300 118px "Chakra Petch", sans-serif';
+  g.lineWidth = 2.5;
+  g.strokeStyle = '#ffffff';
+  g.strokeText('2026', W / 2, 62);
+  const grad = g.createLinearGradient(0, 0, W, 0);
+  grad.addColorStop(0, '#d9b3e8');
+  grad.addColorStop(0.5, '#a9c8f0');
+  grad.addColorStop(1, '#7fd9d6');
+  g.fillStyle = grad;
+  g.font = '900 70px "Noto Sans TC", sans-serif';
+  g.fillText('決策智慧', W / 2, H - 38);
+  return canvasTexture(c);
 }
 
 // ---------------------------------------------------------------- small text labels (sprites / planes)

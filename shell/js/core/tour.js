@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import { clamp, damp, lerp } from './util.js';
 
 // The dive line. Keys are camera stops (and a few in-between waypoints);
-// position s runs from 0 to keys.length-1 and scroll / swipe / keys move it.
-// Releasing always settles on the nearest stop.
+// position s runs from 0 to keys.length-1. One scroll gesture, swipe or key press
+// moves exactly one stop (next / prev); the camera then glides there.
 
 export class Tour {
   constructor(keys) {
@@ -80,6 +80,22 @@ export class Tour {
     this.tw = null;
     this.s = this.target = clamp(k, 0, this.maxS);
     this.settled = this.target;
+    this.idleT = 10;
+  }
+
+  // A finger is dragging: lean a little off the stop so the swipe has something to push against.
+  // Never far enough to leave the stop, and never during a scripted flight.
+  peek(off) {
+    if (this.tw || this.locked) return;
+    const base = this.settled ?? this.nearestStop(this.s);
+    this.target = clamp(base + off, 0, this.maxS);
+    this.idleT = 10;
+  }
+
+  // The finger let go without swiping far enough: fall back onto the stop.
+  release() {
+    if (this.tw || this.settled == null) return;
+    this.target = this.settled;
     this.idleT = 10;
   }
 
