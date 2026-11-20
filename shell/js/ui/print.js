@@ -79,10 +79,10 @@ export function ghostPrint(seen) {
 
   g.fillStyle = '#68f0c4';
   g.font = '500 24px "IBM Plex Mono", monospace';
-  g.fillText('GHOST PRINT', 80, 110);
+  g.fillText('READING PRINT', 80, 110);
   g.fillStyle = '#d9efe9';
   g.font = '900 64px "Noto Sans TC", sans-serif';
-  g.fillText('你的魂紋', 80, 190);
+  g.fillText('你的閱讀指紋', 80, 190);
   g.textAlign = 'right';
   g.fillStyle = 'rgba(217,239,233,0.55)';
   g.font = '400 22px "IBM Plex Mono", monospace';
@@ -104,7 +104,7 @@ export function ghostPrint(seen) {
   }
   g.fillStyle = '#d9efe9';
   g.font = '500 30px "Noto Sans TC", sans-serif';
-  g.fillText('殼越強，魂在哪裡？讀過的每一篇，都在這裡留下一道紋路。', 80, y0 + 110);
+  g.fillText('AI 越強，人在哪裡？讀過的每一篇，都在這裡留下一道紋路。', 80, y0 + 110);
   g.fillStyle = 'rgba(217,239,233,0.45)';
   g.font = '400 20px "IBM Plex Mono", monospace';
   g.fillText('《2026 決策智慧》 · 電通行銷傳播集團', 80, y0 + 160);

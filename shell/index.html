@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>決策智慧 2026 · DIVE</title>
-  <meta name="description" content="《2026 決策智慧》3D 世界——從雨夜屋頂往下潛：運河、水下、深網。殼越強，魂在哪裡？22 篇觀點在不同深度等你。" />
+  <meta name="description" content="《2026 決策智慧》3D 世界——從雨夜屋頂往下潛：運河、水下、深網。AI 越強，人在哪裡？22 篇觀點在不同深度等你。" />
   <meta name="theme-color" content="#05080a" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2305080a'/%3E%3Cpath d='M16 5v22' stroke='%2368f0c4' stroke-width='2'/%3E%3Cpath d='M9 9h14M11 15h10M13 21h6' stroke='%2368f0c4' stroke-width='1.4' opacity='.7'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -38,17 +38,17 @@
   <!-- Hero -->
   <section id="hero" aria-label="封面">
     <div class="hero-main">
-      <div class="hero-kicker mono"><i></i>GHOST · SHELL · DECISION<span class="hero-pub">電通行銷傳播集團 · DENTSU TAIWAN</span></div>
+      <div class="hero-kicker mono"><i></i>PEOPLE · MODEL · A.I<span class="hero-pub">電通行銷傳播集團 · DENTSU TAIWAN</span></div>
       <h1 class="hero-title">決策智慧</h1>
       <div class="hero-en">DECISION INTELLIGENCE <b>2026</b></div>
-      <p class="hero-line">殼越強，<br />魂在哪裡？</p>
-      <p class="hero-lead">AI 是一副越來越強的殼。這本書在找殼裡的魂——信任、真實、判斷。從這座雨夜的屋頂往下潛，22 篇觀點在不同的深度等你。</p>
+      <p class="hero-line">AI 越強，<br />人在哪裡？</p>
+      <p class="hero-lead">AI 一年比一年強。這本書找的是站在它身後的人——信任、真實、判斷。從這座雨夜的屋頂往下潛，22 篇觀點在不同的深度等你。</p>
       <button id="enter" class="btn-dive" disabled>
         <span class="bd-zh">潛入</span><span class="bd-en">DIVE</span><i aria-hidden="true">↓</i>
       </button>
       <div class="hero-how mono">
-        <span class="how-mouse">滾動往下潛 · 拖曳環顧 · 按住空白鍵開啟魂視</span>
-        <span class="how-touch">上滑往下潛 · 左右拖曳環顧 · 右上「魂視」看主題線</span>
+        <span class="how-mouse">滾動往下潛 · 拖曳環顧 · 按住空白鍵看主題線</span>
+        <span class="how-touch">上滑往下潛 · 左右拖曳環顧 · 右上看主題線</span>
       </div>
     </div>
     <ol class="hero-depths mono" aria-label="深度">
@@ -66,7 +66,7 @@
       <span class="brand-text"><b>決策智慧</b><span class="mono">2026 · DIVE</span></span>
     </button>
     <nav class="top-nav">
-      <button class="tb" id="btn-ghost" aria-pressed="false"><span class="mono">GHOST</span><span class="zh">魂視</span></button>
+      <button class="tb" id="btn-ghost" aria-pressed="false"><span class="mono">THREADS</span><span class="zh">主題線</span></button>
       <button class="tb" id="btn-index"><span class="mono">INDEX</span><span class="zh">目錄</span></button>
       <button class="tb" id="btn-sound" aria-pressed="true"><span class="mono">SOUND</span><span class="zh" id="sound-state">開</span></button>
     </nav>
@@ -87,9 +87,9 @@
   <aside id="card" aria-live="polite" aria-hidden="true"></aside>
   <div id="gate" aria-live="polite" aria-hidden="true"></div>
 
-  <!-- Ghost vision panel -->
-  <aside id="ghost" aria-label="魂視" aria-hidden="true">
-    <div class="gh-head"><span class="mono">GHOST VISION · 魂視</span><p>12 條主題線，穿過屋頂、運河、水下和深網。點一條，順著它讀下去。</p></div>
+  <!-- Theme threads panel -->
+  <aside id="ghost" aria-label="主題線" aria-hidden="true">
+    <div class="gh-head"><span class="mono">THREADS · 主題線</span><p>12 條主題線，穿過屋頂、運河、水下和深網。點一條，順著它讀下去。</p></div>
     <div class="gh-chips" id="gh-chips"></div>
     <div class="gh-result" id="gh-result"></div>
   </aside>

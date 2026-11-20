@@ -34,14 +34,14 @@ async function step(p, line, res) {
 // every glyph the canvases will draw, so the right slices of Noto Sans TC arrive first
 const CANVAS_TEXT =
   Object.values(SIGN_TEXT).map((x) => x[0]).join('') +
-  '信任真實記憶代理衡斷文化情境體驗模擬治理注意力義體診所電腦修理網路咖啡茶餐廳港口旅店當舖藥行電子翻譯夜市冰室' +
-  '系統份額人心與社群注意力與記憶殼裡的珍珠衡斷力下一步文化暗流願景幻覺沉默抗拒經驗依賴創新落差中層阻塞工具孤兒' +
-  '眼睛神經臉皮膚聲音心智之鎖觀察／理解推薦決策行動你的魂紋殼越強，魂在哪裡？讀過的每一篇，都在這裡留下一道紋路。《2026決策智慧》·電通行銷傳播集團' +
-  '決策智慧人模型行動信任真實記憶代理衡斷文化情境體驗模擬治理注意力魂殼網潛入同步數據決定判斷選擇相信看見一入中心智';
+  '信任真實記憶代理衡斷文化情境體驗模擬治理注意力眼鏡行電腦修理網路咖啡茶餐廳港口旅店當舖藥行電子翻譯夜市冰室' +
+  '系統份額人心與社群注意力與記憶蚌裡的珍珠衡斷力下一步文化暗流願景幻覺沉默抗拒經驗依賴創新落差中層阻塞工具孤兒' +
+  '眼睛神經臉皮膚聲音心智之鎖觀察／理解推薦決策行動你的閱讀指紋AI越強，人在哪裡？讀過的每一篇，都在這裡留下一道紋路。《2026決策智慧》·電通行銷傳播集團' +
+  '決策智慧人模型行動信任真實記憶代理衡斷文化情境體驗模擬治理注意力心距網潛入同步數據決定判斷選擇相信看見一入中心智';
 
 async function boot() {
   const T = detectTier();
-  await step(0.04, '連線義體', '…');
+  await step(0.04, '建立連線', '…');
   const stage = new Stage($('#gl'), T);
   const { scene, camera, renderer } = stage;
   camera.layers.enable(1);
@@ -95,7 +95,7 @@ async function boot() {
   scene.add(canal.group, canal.under);
   await step(0.56, null, 'OK');
 
-  await step(0.58, '水下 · 5,045 個魂', '…');
+  await step(0.58, '水下 · 5,045 個人', '…');
   const sea = buildSea({ tier: T });
   scene.add(sea.group, sea.snow, sea.bergHolder);
   await step(0.68, null, 'OK');
@@ -197,7 +197,7 @@ async function boot() {
       c.toBlob((blob) => {
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = 'ghost-print-決策智慧2026.png';
+        a.download = 'reading-print-決策智慧2026.png';
         a.click();
         setTimeout(() => URL.revokeObjectURL(a.href), 4000);
       });
@@ -677,7 +677,7 @@ async function boot() {
     if (!window.__timeScale && !window.__manual) stage.adapt(dt);
   }
 
-  await step(1, '同步完成', '22 個魂');
+  await step(1, '同步完成', '22 篇觀點');
   window.__shell = { tour, stage, keys, sts, seen, S, sea, net, city, ui, actions, bootMs: Math.round(performance.now()) };
   setTimeout(() => {
     body.classList.remove('is-loading');

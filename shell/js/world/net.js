@@ -20,7 +20,7 @@ export const PARTS = [
 ];
 
 function glyphSheet() {
-  const chars = '0123456789ABCDEF決策智慧人模型行動信任真實記憶代理衡斷文化情境體驗模擬治理注意力魂殼網潛入同步數據決定判斷選擇相信看見';
+  const chars = '0123456789ABCDEF決策智慧人模型行動信任真實記憶代理衡斷文化情境體驗模擬治理注意力心距網潛入同步數據決定判斷選擇相信看見';
   const N = 16;
   const S = 32;
   const c = document.createElement('canvas');

@@ -4,7 +4,7 @@ import * as THREE from 'three';
 // so brightness always maps to the right glyph whichever font renders it.
 export const RAMPS = [
   [' ', '.', ':', '-', '1', '7', '+', '4', '0', '8'], // code
-  [' ', '.', '一', '人', '入', '中', '心', '信', '智', '魂'], // the book's own words
+  [' ', '.', '一', '人', '入', '中', '心', '信', '智', '慧'], // the book's own words
 ];
 
 const FONT = (px) => `500 ${px}px "IBM Plex Mono", "Noto Sans TC", Consolas, monospace`;

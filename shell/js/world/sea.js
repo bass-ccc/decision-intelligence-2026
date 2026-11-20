@@ -407,7 +407,7 @@ export function buildSea({ tier }) {
   pearlGlow.scale.set(6, 6, 1);
   pearlGlow.position.copy(pearl.position);
   clam.add(pearlGlow);
-  const clamLabel = sprite('殼裡的珍珠', 'JUDGMENT · 衡斷力', '#f6e7e4', 0.8);
+  const clamLabel = sprite('蚌裡的珍珠', 'JUDGMENT · 衡斷力', '#f6e7e4', 0.8);
   clamLabel.position.set(0, 9, 0);
   clam.add(clamLabel);
 

@@ -11,7 +11,7 @@ const CH = {
 };
 export const pageUrl = (p) => `../assets/img/pages/p${pad3(p)}.jpg`;
 export const openerUrl = (p) => `../assets/img/openers/p${pad3(p)}.jpg`;
-const NOISE = '01#%&*+=<>/\\|決策智慧魂殼網潛';
+const NOISE = '01#%&*+=<>/\\|決策智慧人心網潛';
 
 const authorsLine = (a) => a.authors.map((x) => `<b>${esc(x.zh)}</b>${x.en ? ' ' + esc(x.en) : ''}`).join('、');
 export const depthText = (y) => (y >= 0 ? '+' : '−') + Math.abs(y).toFixed(1).padStart(5, '0');
@@ -172,7 +172,7 @@ export class UI {
           ${
             pm
               ? `<div class="cd-pm"><span class="mono">TRY IT · 動手看看</span><div class="cd-pm-row">
-                  <button class="pm-btn" data-pm="wave">5,045 個魂</button>
+                  <button class="pm-btn" data-pm="wave">5,045 個人</button>
                   <button class="pm-btn" data-pm="persona">遇見 Lisa 與 Cindy</button>
                   <button class="pm-btn" data-pm="morph">同步率 r = 0.89</button>
                 </div></div>`
@@ -302,7 +302,7 @@ export class UI {
       <div class="pm-count" id="pm-count"><b>5,045</b><span>顆發光的種子 = 5,045 位 CCS 真實受訪者</span></div>
       <div class="pm-stats" id="pm-stats">
         <span class="mono">PEOPLE MODEL · SYNC RATE</span>
-        <h3>複製出來的魂，<br />對得上真人嗎？</h3>
+        <h3>複製出來的人，<br />對得上真人嗎？</h3>
         <div class="grid">
           <div><b>${v.r}</b><span>相關係數 r</span></div>
           <div><b>${v.mae}%</b><span>MAE 平均落差</span></div>
@@ -355,7 +355,7 @@ export class UI {
           : ''
       }
       ${a.closing ? `<p class="dg-closing">${esc(a.closing)}</p>` : ''}
-      <section class="dg-sec"><h4>主題線 · 在魂視裡順著讀</h4><div class="dg-themes">${themesFor(a.no).map((t) => `<button data-theme="${t.id}">${esc(t.zh)}</button>`).join('')}</div></section>
+      <section class="dg-sec"><h4>主題線 · 點一條順著讀</h4><div class="dg-themes">${themesFor(a.no).map((t) => `<button data-theme="${t.id}">${esc(t.zh)}</button>`).join('')}</div></section>
       <div class="dg-foot">
         <button class="btn btn-solid" data-dg="read">翻閱原文 P.${a.start}–${a.end}</button>
         ${a.no < 22 ? `<button class="btn btn-line" data-dg="next">下一篇 →</button>` : ''}
@@ -485,12 +485,12 @@ export class UI {
         `<div class="fn-print" id="fn-print"></div>
         <div class="fn">
           <span class="mono">SURFACE · DAWN · SYNC ${pad2(Math.round((seen.size / 22) * 100))}%</span>
-          <h2>雨停了。<br />魂，一直在殼裡。</h2>
+          <h2>雨停了。<br />人，一直都在。</h2>
           <div class="fn-en">${esc(BOOK.mottoEn)}</div>
-          <p>往下潛，你看見 AI 這副殼怎麼一層一層被造出來；浮上來，你帶回來的是人——<b>信任、真實、判斷</b>。AI 改變的是分工，沒改變的是判斷。</p>
-          <p>左邊是你的<b>魂紋</b>：你停下來讀過的 ${seen.size} 篇文章，各在上面留下一道紋路。沒有兩個人會一樣。</p>
+          <p>往下潛，你看見 AI 怎麼一層一層被造出來；浮上來，你帶回來的是人——<b>信任、真實、判斷</b>。AI 改變的是分工，沒改變的是判斷。</p>
+          <p>這張圖是你的<b>閱讀指紋</b>：你停下來讀過的 ${seen.size} 篇文章，各在上面留下一道紋路。沒有兩個人會一樣。</p>
           <div class="fn-actions">
-            <button class="btn btn-solid" data-fn="save" style="--c:var(--ghost)">下載我的魂紋 ↓</button>
+            <button class="btn btn-solid" data-fn="save" style="--c:var(--ghost)">下載我的閱讀指紋 ↓</button>
             <button class="btn btn-line" data-fn="again">再潛一次 ↺</button>
             <button class="btn btn-line" data-fn="index">目錄</button>
           </div>
