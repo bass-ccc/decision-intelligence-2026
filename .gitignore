@@ -11,5 +11,7 @@ film/media/raw/
 film/media/key/
 
 # 三座巨像 is kept on this computer only (not published)
-world/
+# (anchored to the top of the repository: without the leading slash it also hid new files in
+# shell/js/world/, which the published site needs)
+/world/
 start-world.bat

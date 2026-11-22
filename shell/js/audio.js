@@ -129,7 +129,8 @@ export class Sound {
     dig.connect(df).connect(this.digGain).connect(this.master);
     dig.start(now);
 
-    this.env = { rain: 1, under: 0, net: 0 };
+    // (nothing applied yet: rain -1 is no value the world gives, so the first mix() writes it all)
+    this.env = { rain: -1, under: 0, net: 0 };
     this.set(this.on);
   }
 
@@ -146,7 +147,9 @@ export class Sound {
     const t = this.ctx.currentTime;
     const e = this.env;
     if (Math.abs(e.rain - rain) > 0.02 || Math.abs(e.under - under) > 0.02 || Math.abs(e.net - net) > 0.02 || Math.abs((e.dawn || 0) - dawn) > 0.02) {
-      this.rainGain.gain.setTargetAtTime(rain * 0.16, t, 0.5);
+      // (rain: how much of it is heard, 1 on the open roof, less down between the canal's walls.
+      // It is a hiss between 900 and 7000 Hz under the reading, so it is kept low: it was 0.16)
+      this.rainGain.gain.setTargetAtTime(rain * 0.1, t, 0.5);
       this.lp.frequency.setTargetAtTime(under > 0.5 && net < 0.5 ? 700 : 18000, t, 0.25);
       this.droneGain.gain.setTargetAtTime(Math.max(under, net) * 0.06, t, 1.2);
       this.digGain.gain.setTargetAtTime(net * 0.018, t, 1);
@@ -240,6 +243,36 @@ export class Sound {
     o.start(t);
     o.stop(t + 1.2);
     this.noiseHit(0.3, 900, 200, 0.08 * v, 'lowpass');
+  }
+
+  // The ping (main.js): one soft note for a click on the scene, quieter than the arrival bell.
+  // The canal: a drop into water. The sea: a sounding and its echo (low, because everything under
+  // water goes through the 700 Hz filter above). The Net: two short blips.
+  ping(chapter) {
+    if (!this.ctx || !this.on) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime + 0.01;
+    const tone = (type, f0, f1, at, dur, gain) => {
+      const o = ctx.createOscillator();
+      o.type = type;
+      o.frequency.setValueAtTime(f0, at);
+      if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, at + dur);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, at);
+      g.gain.exponentialRampToValueAtTime(gain, at + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+      o.connect(g).connect(this.master);
+      o.start(at);
+      o.stop(at + dur + 0.05);
+    };
+    if (chapter === 'people') tone('sine', 640, 300, t, 0.22, 0.045);
+    else if (chapter === 'model') {
+      tone('sine', 500, 480, t, 0.9, 0.05);
+      tone('sine', 500, 480, t + 0.3, 0.7, 0.02);
+    } else {
+      tone('triangle', 1320, 1320, t, 0.05, 0.022);
+      tone('triangle', 1760, 1760, t + 0.06, 0.05, 0.022);
+    }
   }
 
   ghost(on) {

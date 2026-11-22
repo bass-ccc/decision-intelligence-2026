@@ -1,6 +1,7 @@
 import { BOOK, SECTIONS, THEMES, ARTICLES, PEOPLE_MODEL, themesFor } from '../../../assets/js/data.js';
 import { COLORS, setMarkup, esc, pad2, pad3 } from '../core/util.js';
 import { THEME_COLORS } from '../world/threads.js';
+import { BEATS, hasBeats, beatName, beatTab, beatHTML, themesHTML } from './beats.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const CH = {
@@ -52,6 +53,10 @@ export class UI {
     this.zoneEl = $('#zone');
     this.cardKey = null;
     this.panel = null;
+    this.beat = 0;
+    this.capH = 0;
+    this.capMax = 0;
+    this.pmSide = [-1, -1];
     this.buildIndex();
     this.buildGhost();
     this.buildPM();
@@ -156,9 +161,16 @@ export class UI {
       const prevText = !before || before.kind === 'hero' ? '' : before.kind === 'gate' ? '↑ 章首' : '↑ 上一篇';
       const nextText = !after ? '' : after.kind === 'finale' ? '浮出水面 ↑' : after.kind === 'gate' ? `下一章 · ${CH[after.chapter].place} ↓` : '下一篇 ↓';
       this.card.style.setProperty('--c', COLORS[a.section]);
-      setMarkup(
-        this.card,
-        `<div class="cd${pm ? ' cd-tall' : ''}">
+      // a stop that is read in place has no card to open: see buildBeats
+      const beats = hasBeats(a.no);
+      this.capMax = 0;
+      this.card.classList.toggle('bt', beats);
+      this.card.setAttribute('aria-live', beats ? 'off' : 'polite');
+      if (beats) this.buildBeats(a, ch, prevText, nextText);
+      else
+        setMarkup(
+          this.card,
+          `<div class="cd${pm ? ' cd-tall' : ''}">
           <div class="cd-kick"><span><b>${ch.no} ${ch.name}</b> · ${pad2(a.no)} / 22</span><span>P.${pad3(a.start)}–${pad3(a.end)}</span></div>
           ${a.kicker ? `<span class="cd-special">〈${esc(a.kicker)}〉</span>` : ''}
           <h2 class="cd-title"></h2>
@@ -183,14 +195,16 @@ export class UI {
             <button class="cd-step next" data-step="1"${nextText ? '' : ' disabled'}>${nextText || '↓'}</button>
           </nav>
         </div>`
-      );
+        );
       this.card.querySelectorAll('[data-step]').forEach((b) => (b.onclick = () => (b.dataset.step === '1' ? this.actions.next() : this.actions.prev())));
       decode(this.card.querySelector('.cd-title'), a.title);
-      this.card.querySelector('[data-act="digest"]').onclick = () => this.openDigest(a.no);
       this.card.querySelector('[data-act="read"]').onclick = () => this.openReader(a.start, a.end, a.start, `${pad2(a.no)} ${a.title}`);
-      this.card.querySelectorAll('[data-pm]').forEach((b) => (b.onclick = () => this.actions.peopleModel(b.dataset.pm)));
-      const img = this.card.querySelector('.cd-thumb');
-      img.onerror = () => img.remove();
+      if (!beats) {
+        this.card.querySelector('[data-act="digest"]').onclick = () => this.openDigest(a.no);
+        this.card.querySelectorAll('[data-pm]').forEach((b) => (b.onclick = () => this.actions.peopleModel(b.dataset.pm)));
+        const img = this.card.querySelector('.cd-thumb');
+        img.onerror = () => img.remove();
+      }
       requestAnimationFrame(() => {
         // the camera may already have moved on while this frame was waiting
         if (this.cardKey !== id) return;
@@ -199,8 +213,203 @@ export class UI {
         this.card.inert = false;
         document.body.classList.add('card-up');
         this.giveStepFocus(this.card.querySelector(`[data-step="${this._stepFocus}"]:not(:disabled)`));
+        this.measureCard();
       });
     }, 240);
+  }
+
+  // ---------------------------------------------------------------- reading in place (ui/beats.js)
+  // The article's digest stands on the scene in six beats; main.js owns which beat is open and
+  // tells the worlds. On a wide screen the beats are one column that scrolls, and the open beat
+  // is the one in view. On a narrow screen one beat shows at a time.
+  beatsScroll() {
+    return window.innerWidth > 820;
+  }
+
+  buildBeats(a, ch, prevText, nextText) {
+    const each = (fn) => Array.from({ length: BEATS }, (_, i) => fn(i)).join('');
+    const tab = (i) => {
+      const [mark, words] = beatTab(a, i);
+      return `<button role="tab" id="bt-t${i}" aria-controls="bt-p${i}" aria-label="${esc(words ? `${mark} ${words}` : mark)}" data-beat="${i}"><b>${esc(mark)}</b>${words ? `<span>${esc(words)}</span>` : ''}</button>`;
+    };
+    setMarkup(
+      this.card,
+      `<article class="bt-box" aria-labelledby="bt-title">
+        <header class="bt-head">
+          <div class="cd-kick"><span><b>${ch.no} ${ch.name}</b> · ${pad2(a.no)} / 22</span><span class="bt-where" aria-hidden="true"></span></div>
+          ${a.kicker ? `<span class="cd-special">〈${esc(a.kicker)}〉</span>` : ''}
+          <h2 class="cd-title" id="bt-title"></h2>
+          ${a.subtitle ? `<p class="cd-sub">${esc(a.subtitle)}</p>` : ''}
+          <p class="cd-auth">${authorsLine(a)}</p>
+        </header>
+        <p class="bt-sr" aria-live="polite"></p>
+        <div class="bt-tabs" role="tablist" aria-label="這一篇的六格：開場、四個重點、框架">${each(tab)}</div>
+        <div class="bt-panels">${each((i) => `<section class="bt-panel" role="tabpanel" id="bt-p${i}" aria-labelledby="bt-t${i}">${beatHTML(a, i)}</section>`)}</div>
+        <div class="bt-more">
+          <button class="bt-read" data-act="read" aria-label="閱讀全文：翻閱刊物第 ${a.start} 到 ${a.end} 頁"><span>閱讀全文</span><em>P.${a.start}–${a.end}</em><i aria-hidden="true">→</i></button>
+          <div class="bt-themes">${themesHTML(a)}</div>
+        </div>
+        <nav class="cd-nav" aria-label="上一站、下一站，和這一篇的上一點、下一點">
+          <button class="cd-step" data-step="-1"${prevText ? '' : ' disabled'}>${prevText || '↑'}</button>
+          <span class="bt-turn">
+            <button class="bt-arrow" data-turn="-1" aria-label="這一篇的上一點">‹</button>
+            <button class="bt-arrow next" data-turn="1" aria-label="這一篇的下一點">›</button>
+          </span>
+          <button class="cd-step next" data-step="1"${nextText ? '' : ' disabled'}>${nextText || '↓'}</button>
+        </nav>
+      </article>`
+    );
+    this.card.querySelectorAll('[data-beat]').forEach((b) => {
+      b.onclick = () => {
+        const i = Number(b.dataset.beat);
+        if (!this.actions.beat(i)) this.beatTop(i);
+      };
+    });
+    this.card.querySelectorAll('[data-turn]').forEach((b) => (b.onclick = () => this.actions.beatStep(Number(b.dataset.turn))));
+    this.card.querySelectorAll('[data-theme]').forEach((b) => {
+      b.onclick = () => {
+        this.actions.toggleGhost(true);
+        this.pickTheme(b.dataset.theme);
+      };
+    });
+    // on a narrow screen the quote and the passages of the article are folded: a tap (or Enter) opens one
+    this.card.querySelectorAll('[data-fold]').forEach((el) => {
+      el.onclick = () => {
+        if (this.beatsScroll()) return;
+        el.classList.toggle('open');
+        this.measureCard();
+      };
+      el.onkeydown = (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        el.click();
+      };
+    });
+    // on a wide screen the open beat is whichever part of the column is in view
+    const sc = this.card.querySelector('.bt-panels');
+    this._btGo = -1;
+    sc.addEventListener(
+      'scroll',
+      () => {
+        // a hidden card's column may still be coasting from a flick: it says nothing about the next stop
+        if (!this.beatsScroll() || this.card.inert) return;
+        this.actions.beatRead();
+        const at = this.beatInView(sc);
+        // while the column travels to a beat that was asked for, the ones it passes do not count
+        if (this._btGo >= 0) {
+          if (at === this._btGo) this._btGo = -1;
+          return;
+        }
+        if (at !== this.beat) this.actions.beat(at, true);
+      },
+      { passive: true }
+    );
+    sc.addEventListener('scrollend', () => (this._btGo = -1));
+    // ...and so does the reader's own hand on the column, at once
+    for (const type of ['wheel', 'touchstart', 'pointerdown']) sc.addEventListener(type, () => (this._btGo = -1), { passive: true });
+    this.setBeat(this.beat, { lead: `${pad2(a.no)} ${a.title}。`, jump: true });
+  }
+
+  // which beat the scrolling column shows: the last one whose top is above a line a third of the way down
+  beatInView(sc) {
+    const kids = sc.children;
+    if (sc.scrollTop <= 2) return 0;
+    if (sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 2) return kids.length - 1;
+    const line = sc.scrollTop + sc.clientHeight * 0.35;
+    let at = 0;
+    for (let k = 0; k < kids.length; k++) if (kids[k].offsetTop <= line) at = k;
+    return at;
+  }
+
+  // Open one beat (0 開場, 1-4 the key points, 5 框架).
+  // fromScroll: the column is already there (the reader scrolled to it). jump: go without gliding.
+  setBeat(i, { lead = '', fromScroll = false, jump = false } = {}) {
+    this.beat = i;
+    const box = this.card.querySelector('.bt-box');
+    if (!box) return;
+    const had = document.activeElement;
+    const paged = !this.beatsScroll();
+    box.dataset.beat = i;
+    box.querySelectorAll('.bt-panel').forEach((p, k) => (p.hidden = paged && k !== i));
+    box.querySelectorAll('[data-beat]').forEach((b, k) => {
+      b.setAttribute('aria-selected', String(k === i));
+      b.tabIndex = k === i ? 0 : -1;
+    });
+    box.querySelector('.bt-where').textContent = beatName(i);
+    box.querySelector('.bt-sr').textContent = fromScroll ? '' : lead + beatName(i);
+    const back = box.querySelector('[data-turn="-1"]');
+    const on = box.querySelector('[data-turn="1"]');
+    back.disabled = i === 0;
+    on.disabled = i === BEATS - 1;
+    // a button that just switched itself off must not swallow the focus: hand it to the one that still works
+    if (had === back && back.disabled) on.focus({ preventScroll: true });
+    if (had === on && on.disabled) (box.querySelector('[data-step="1"]:not(:disabled)') || back).focus({ preventScroll: true });
+    if (had && had.dataset.beat !== undefined && box.contains(had)) box.querySelector(`[data-beat="${i}"]`).focus({ preventScroll: true });
+    if (!paged && !fromScroll) this.scrollToBeat(box, i, jump);
+    this.measureCard();
+  }
+
+  scrollToBeat(box, i, jump) {
+    const sc = box.querySelector('.bt-panels');
+    // where the column can really go: the last beats cannot always reach the top
+    const top = Math.max(0, Math.min(i === 0 ? 0 : sc.children[i].offsetTop - 6, sc.scrollHeight - sc.clientHeight));
+    clearTimeout(this._btGoT);
+    // already there: no scroll event will come, so there is nothing to wait for
+    if (Math.abs(top - sc.scrollTop) < 1) {
+      this._btGo = -1;
+      return;
+    }
+    this._btGo = i;
+    this._btGoT = setTimeout(() => (this._btGo = -1), 900);
+    const calm = jump || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    sc.scrollTo({ top, behavior: calm ? 'auto' : 'smooth' });
+  }
+
+  // the lit rail mark, or the number key of the open beat: back to the start of that beat
+  beatTop(i) {
+    const box = this.card.querySelector('.bt-box');
+    if (box && this.beatsScroll() && i === this.beat) this.scrollToBeat(box, i, false);
+  }
+
+  // The wheel turned over another part of the block (the title, the buttons): the column still
+  // scrolls, by no more than a page of its own at a time (a wheel set to pages sends window heights).
+  scrollBeats(d) {
+    const sc = this.card.querySelector('.bt-panels');
+    if (!sc) return;
+    this._btGo = -1;
+    const page = sc.clientHeight * 0.9;
+    sc.scrollTop += Math.max(-page, Math.min(page, d));
+  }
+
+  // The height of the text block is read once per change, never per frame. capMax is the tallest
+  // it has been at this stop: the picture is placed for that, so turning a beat does not move it.
+  measureCard() {
+    cancelAnimationFrame(this._capRaf);
+    this._capRaf = requestAnimationFrame(() => {
+      this.capH = this.card.classList.contains('bt') ? this.card.offsetHeight : 0;
+      // after the window changed width the old maximum belongs to another layout
+      this.capMax = this._capFresh ? this.capH : Math.max(this.capMax, this.capH);
+      this._capFresh = false;
+      // what is folded on a narrow screen can take the focus there, so Enter can open it
+      const paged = !this.beatsScroll();
+      this.card.querySelectorAll('[data-fold]').forEach((el) => {
+        if (paged) el.tabIndex = 0;
+        else el.removeAttribute('tabindex');
+      });
+      // the column itself takes the focus where it scrolls, so the keyboard can scroll it (see main.js)
+      const sc = this.card.querySelector('.bt-panels');
+      if (sc) {
+        if (paged) sc.removeAttribute('tabindex');
+        else sc.tabIndex = 0;
+      }
+    });
+  }
+
+  // Where the text sits at the bottom of a narrow screen, the picture is lifted by this many pixels
+  // so the thing the stop is about stands in the open part of the frame. 180 = what the top of the
+  // screen already holds (the bar, the zone line) plus room for the label that floats over the object.
+  cardLift() {
+    return this.card.classList.contains('show') && this.card.classList.contains('bt') ? Math.max(0, this.capMax - 180) / 2 : 0;
   }
 
   // A hidden card or gate is made inert so its buttons cannot be reached while invisible. That drops
@@ -315,18 +524,36 @@ export class UI {
     this.pm = { a: $('#pm-a'), b: $('#pm-b'), count: $('#pm-count'), stats: $('#pm-stats') };
   }
 
-  updatePM(mode, anchors, camera, w, h, near) {
+  // open: how many pixels of the window's width, from the left, the text of the stop leaves free
+  // rest: where the two seeds come to rest (anchors are where they are this frame)
+  updatePM(mode, anchors, camera, w, h, near, open = w, rest = anchors) {
     const { a, b, count, stats } = this.pm;
     count.classList.toggle('show', near && mode === 'wave');
     stats.classList.toggle('show', near && mode === 'morph');
     const per = near && mode === 'persona';
     [a, b].forEach((el, i) => {
       el.classList.toggle('show', per);
-      if (!per || !anchors) return;
+      if (!per || !anchors) {
+        this.pmSide[i] = -1; // the side is chosen anew the next time the words come up
+        return;
+      }
       const v = anchors[i].clone().project(camera);
       const x = ((v.x + 1) / 2) * w;
       const y = ((1 - v.y) / 2) * h;
-      el.style.transform = `translate(${Math.round(x + (i ? 24 : -274))}px, ${Math.round(y - 60)}px)`;
+      // Lisa's words stand to the left of her seed and Cindy's to the right of hers (side 0 / 1);
+      // where that side has no room (the window's edge, the text of the stop) they stand on the
+      // other one. The side is chosen from where the seed comes to rest, not from where it is while
+      // it slides out, and it is kept until it misses by more than the camera's sway moves the seed
+      // (under 40px): words that changed sides while they are read would jump 300px.
+      const rx = ((rest[i].clone().project(camera).x + 1) / 2) * w;
+      const miss = (s) => (s ? rx + 274 - (open - 12) : 12 - (rx - 274)); // by how much side s has no room
+      let side = this.pmSide[i];
+      if (side < 0) side = miss(i) > 0 && miss(1 - i) < miss(i) ? 1 - i : i;
+      else if (miss(side) > 40 && miss(1 - side) < miss(side)) side = 1 - side;
+      else if (side !== i && miss(i) < -40) side = i;
+      this.pmSide[i] = side;
+      const bx = Math.max(12, Math.min(side ? x + 24 : x - 274, open - 262));
+      el.style.transform = `translate(${Math.round(bx)}px, ${Math.round(y - 60)}px)`;
     });
   }
 
@@ -384,9 +611,31 @@ export class UI {
   openReader(start, end, page, title) {
     $('#rd-kicker').textContent = `P.${start}–${end}`;
     $('#rd-title').textContent = title || '';
-    this.single = window.innerWidth < 820;
+    this.zoomed = false;
+    this.single = window.innerWidth <= 820;
+    this.reader.classList.remove('zoom');
     this.showPage(page);
+    this.zoomLabel();
     this.openPanel('reader');
+  }
+
+  // One page at reading size, in a stage that scrolls: a whole page on a phone is a picture of a
+  // page (about 6px type). Turning the page keeps the zoom.
+  setZoom(on, page = this.readerPage) {
+    this.zoomed = on;
+    this.single = on || window.innerWidth <= 820;
+    this.reader.classList.toggle('zoom', on);
+    this.showPage(page);
+    this.zoomLabel();
+    const st = $('#rd-stage');
+    st.scrollTop = 0;
+    st.scrollLeft = Math.max(0, (st.scrollWidth - st.clientWidth) / 2);
+  }
+
+  zoomLabel() {
+    const b = $('#rd-zoom');
+    b.textContent = this.zoomed ? '縮小' : '放大';
+    b.setAttribute('aria-pressed', String(!!this.zoomed));
   }
 
   showPage(p) {
@@ -413,6 +662,7 @@ export class UI {
     $('#rd-range').value = left;
     $('#rd-count').textContent = `${pad3(left)} / 196`;
     [left + 2, left + 3].forEach((n) => n <= 196 && (new Image().src = pageUrl(n)));
+    if (this.zoomed) $('#rd-stage').scrollTop = 0;
   }
 
   // ---------------------------------------------------------------- index
@@ -450,6 +700,14 @@ export class UI {
     const chips = $('#gh-chips');
     setMarkup(chips, THEMES.map((t, i) => `<button class="chip" data-theme="${t.id}" style="--tc:${THEME_COLORS[i]}"><i></i>${esc(t.zh)}<em>${t.articles.length}</em></button>`).join(''));
     chips.querySelectorAll('.chip').forEach((b) => (b.onclick = () => this.pickTheme(b.dataset.theme)));
+  }
+
+  // the threads view has closed: no chip stays lit, no list stays behind
+  clearTheme() {
+    $('#gh-chips')
+      .querySelectorAll('.chip')
+      .forEach((x) => x.classList.remove('on'));
+    setMarkup($('#gh-result'), '');
   }
 
   pickTheme(id) {
@@ -543,6 +801,11 @@ export class UI {
   bind() {
     $('#dg-close').onclick = () => this.closePanels();
     $('#ix-close').onclick = () => this.closePanels();
+    // the threads panel closes from its own corner too; the focus goes back to the button that opens it
+    $('#gh-close').onclick = () => {
+      this.actions.toggleGhost(false);
+      $('#btn-ghost').focus({ preventScroll: true });
+    };
     $('#rd-close').onclick = () => this.closePanels();
     $('#rd-prev').onclick = () => this.showPage(this.readerPage - (this.single ? 1 : 2));
     $('#rd-next').onclick = () => this.showPage(this.readerPage + (this.single ? 1 : 2));
@@ -553,18 +816,47 @@ export class UI {
     $('#brand').onclick = () => this.actions.home();
     $('#gg-prev').onclick = () => this.actions.prev();
     $('#gg-next').onclick = () => this.actions.next();
+    let capW = window.innerWidth;
+    let wide = this.beatsScroll();
+    window.addEventListener('resize', () => {
+      if (window.innerWidth !== capW) {
+        capW = window.innerWidth;
+        this._capFresh = true;
+      }
+      if (this.beatsScroll() !== wide) {
+        wide = !wide;
+        this.setBeat(this.beat, { jump: true });
+      }
+      this.measureCard();
+    });
     let sx = null;
-    $('#rd-stage').addEventListener('pointerdown', (e) => (sx = e.clientX));
+    let sy = 0;
+    let dragged = 0;
+    $('#rd-stage').addEventListener('pointerdown', (e) => {
+      sx = e.clientX;
+      sy = e.clientY;
+    });
     $('#rd-stage').addEventListener('pointerup', (e) => {
       if (sx === null) return;
       const dx = e.clientX - sx;
+      if (Math.hypot(dx, e.clientY - sy) > 10) dragged = performance.now();
       sx = null;
-      if (Math.abs(dx) > 50) (dx < 0 ? $('#rd-next') : $('#rd-prev')).click();
+      // a zoomed page is dragged about to be read: there a sideways drag does not turn the page
+      if (!this.zoomed && Math.abs(dx) > 50) (dx < 0 ? $('#rd-next') : $('#rd-prev')).click();
     });
+    // a click on a page (not the end of a drag) zooms that page, or lets it go
+    [$('#rd-l'), $('#rd-r')].forEach((fig, i) => {
+      fig.onclick = () => {
+        if (performance.now() - dragged < 350 || fig.classList.contains('blank')) return;
+        this.setZoom(!this.zoomed, this.zoomed || this.single ? this.readerPage : this.readerPage + i);
+      };
+    });
+    $('#rd-zoom').onclick = () => this.setZoom(!this.zoomed);
     window.addEventListener('keydown', (e) => {
-      if (this.panel === 'reader') {
-        if (e.key === 'ArrowRight') $('#rd-next').click();
-        if (e.key === 'ArrowLeft') $('#rd-prev').click();
+      if (this.panel === 'reader' && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+        // (cancelled, so the page slider does not take the same key as well when it has the focus)
+        e.preventDefault();
+        (e.key === 'ArrowRight' ? $('#rd-next') : $('#rd-prev')).click();
       }
       if (e.key === 'Escape') {
         if (this.panel) this.closePanels();

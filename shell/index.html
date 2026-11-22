@@ -89,6 +89,7 @@
 
   <!-- Theme threads panel -->
   <aside id="ghost" aria-label="主題線" aria-hidden="true">
+    <button class="x-close" id="gh-close" aria-label="關閉主題線">✕</button>
     <div class="gh-head"><span class="mono">THREADS · 主題線</span><p>12 條主題線，穿過屋頂、運河、水下和深網。點一條，順著它讀下去。</p></div>
     <div class="gh-chips" id="gh-chips"></div>
     <div class="gh-result" id="gh-result"></div>
@@ -117,6 +118,7 @@
     <button class="rd-nav rd-prev" id="rd-prev" aria-label="上一頁">‹</button>
     <button class="rd-nav rd-next" id="rd-next" aria-label="下一頁">›</button>
     <div class="rd-bottom">
+      <button class="rd-zoom" id="rd-zoom" aria-pressed="false">放大</button>
       <input type="range" id="rd-range" min="1" max="196" value="1" aria-label="頁碼" />
       <span class="mono" id="rd-count">001 / 196</span>
     </div>

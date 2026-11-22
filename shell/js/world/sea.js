@@ -73,7 +73,16 @@ function sprite(text, sub, color, scale = 1) {
   return s;
 }
 
-export function buildSea({ tier }) {
+// A number of light: the one figure of an article that reads by itself (see ui/beats-src.js),
+// standing by the article's object. Unlit until its article is the one being read.
+export function figure(text, color) {
+  const tex = textPlaneTexture(String(text), { w: 512, h: 192, color, font: '700 128px "Noto Sans TC", sans-serif' });
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: true, opacity: 0, color: new THREE.Color(1.3, 1.3, 1.3) }));
+  s.scale.set(9, 9 * (192 / 512), 1);
+  return s;
+}
+
+export function buildSea({ tier, lights = {} }) {
   const group = new THREE.Group();
   const r = rng(52);
   const pink = new THREE.Color(COLORS.model);
@@ -160,10 +169,13 @@ export function buildSea({ tier }) {
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
-      vertexShader: `uniform float uTime; uniform vec3 uBox; varying float vA;
+      vertexShader: `uniform float uTime; uniform vec3 uBox; uniform vec4 uPing; uniform float uPingK; uniform float uPingM; varying float vA;
         void main(){ vec3 p = position * uBox + vec3(sin(uTime * 0.1 + position.x * 30.0) * 0.8, uTime * 0.35, cos(uTime * 0.12 + position.z * 20.0) * 0.8);
           p = mod(p - cameraPosition + uBox * 0.5, uBox) - uBox * 0.5 + cameraPosition;
-          vec4 mv = viewMatrix * vec4(p, 1.0); float d = -mv.z; vA = smoothstep(1.0, 4.0, d) * (1.0 - smoothstep(18.0, 28.0, d)) * step(p.y, -0.5);
+          // the ping (main.js): the pulse carries the snow a little way out as it passes, and it glints
+          float sh = 0.0;
+          if (uPingK > 0.001) { vec3 pd = p - uPing.xyz; float pl = length(pd); float px = pl - uPing.w; sh = uPingK * exp(-px * px * 0.25); p += pd / max(pl, 1e-3) * (sh * uPingM * 1.4); }
+          vec4 mv = viewMatrix * vec4(p, 1.0); float d = -mv.z; vA = smoothstep(1.0, 4.0, d) * (1.0 - smoothstep(18.0, 28.0, d)) * step(p.y, -0.5) * (1.0 + 3.0 * sh);
           gl_PointSize = clamp(60.0 / d, 1.0, 5.0); gl_Position = projectionMatrix * mv; }`,
       fragmentShader: `varying float vA; uniform float uAmt; void main(){ float d = length(gl_PointCoord - 0.5); gl_FragColor = vec4(vec3(0.5, 0.8, 0.75) * smoothstep(0.5, 0.1, d) * vA * 0.5 * uAmt, 1.0); }`,
     })
@@ -337,6 +349,7 @@ export function buildSea({ tier }) {
     fogMat({
       uniforms: { uCenter: { value: SHOAL.clone() }, uRads: { value: new THREE.Vector3(8, 14, 20) }, uYs: { value: new THREE.Vector3(3, -1, -5) }, uSpeeds: { value: new THREE.Vector3(0.22, -0.15, 0.1) }, uFocus: { value: -1 } },
       vertexShader: `attribute vec4 aFish; attribute vec3 aCol; uniform float uTime; uniform vec3 uCenter; uniform vec3 uRads; uniform vec3 uYs; uniform vec3 uSpeeds; uniform float uFocus;
+        uniform vec4 uPing; uniform float uPingK; uniform float uPingM;
         varying vec3 vCol; varying vec3 vN;
         #include <fog_pars_vertex>
         void main(){
@@ -347,6 +360,12 @@ export function buildSea({ tier }) {
           float a = aFish.y + uTime * sp;
           float rr = rad + (aFish.z - 0.5) * 3.0 + sin(uTime * 0.7 + aFish.w * 20.0) * 0.6;
           vec3 c = uCenter + vec3(cos(a) * rr, yy + (aFish.w - 0.5) * 3.0 + sin(uTime + aFish.z * 30.0) * 0.4, sin(a) * rr);
+          // the ping (main.js): the shoal opens round the clicked point, and each fish is carried a
+          // little way out as the pulse passes it
+          if (uPingK > 0.001) {
+            vec3 pd = c - uPing.xyz; float pl = length(pd); float px = pl - uPing.w;
+            c += pd / max(pl, 1e-3) * (uPingK * uPingM * (3.0 * exp(-pl * pl * 0.02) + 2.0 * exp(-px * px * 0.12)));
+          }
           vec3 fwd = normalize(vec3(-sin(a), 0.0, cos(a)) * sign(sp));
           vec3 up = vec3(0.0, 1.0, 0.0);
           vec3 side = normalize(cross(up, fwd));
@@ -410,6 +429,9 @@ export function buildSea({ tier }) {
   const clamLabel = sprite('蚌裡的珍珠', 'JUDGMENT · 衡斷力', '#f6e7e4', 0.8);
   clamLabel.position.set(0, 9, 0);
   clam.add(clamLabel);
+  // how far the lid stands open (radians) at each beat where the stop is read in place:
+  // the opening, then the four key points. Unread, the clam opens to 0.62 on arrival as before.
+  const CLAM_OPEN = [0.36, 0.45, 0.54, 0.63, 0.82];
 
   // ------------------------------------------------------------ 15 · the decision coral
   const branches = [];
@@ -476,6 +498,15 @@ export function buildSea({ tier }) {
   const coralLabel = sprite('下一步', 'THE NEXT STEP', '#ffe0c8', 0.7);
   coralLabel.position.copy(chosenTip ? chosenTip.pos : CORAL).add(new THREE.Vector3(0, 3, 0));
   group.add(coralLabel);
+  // numbers of light, above the labels of the things they belong to: [article, sprite]
+  const figures = [];
+  if (lights[15]) {
+    const f = figure(lights[15], '#ffe0c8');
+    f.scale.multiplyScalar(0.7);
+    f.position.copy(coralLabel.position).add(new THREE.Vector3(0, 2.3, 0));
+    group.add(f);
+    figures.push([15, f]);
+  }
 
   // ------------------------------------------------------------ 16 · the iceberg and its six undercurrents
   const bergGeo = new THREE.IcosahedronGeometry(1, 4);
@@ -518,7 +549,7 @@ export function buildSea({ tier }) {
   // the tip of the iceberg is visible from the canal, so it lives outside the sea group
   const bergHolder = new THREE.Group();
   bergHolder.add(berg);
-  const currents = ['願景幻覺', '沉默抗拒', '經驗依賴', '創新落差', '中層阻塞', '工具孤兒'];
+  const currents = ['願景幻覺', '沉默抗拒', '經驗倚賴', '創新落差', '中層阻塞', '工具孤兒'];
   const curMat = fogMat({
     transparent: true,
     depthWrite: false,
@@ -552,6 +583,13 @@ export function buildSea({ tier }) {
   const bergLabel = sprite('文化暗流', 'ONLY THE TIP SHOWS', '#bff4f6', 1.2);
   bergLabel.position.copy(BERG).add(new THREE.Vector3(-30, -6, 30));
   group.add(bergLabel);
+  if (lights[16]) {
+    const f = figure(lights[16], '#bff4f6');
+    f.scale.multiplyScalar(1.5);
+    f.position.copy(bergLabel.position).add(new THREE.Vector3(0, 5.2, 0));
+    group.add(f);
+    figures.push([16, f]);
+  }
 
   // ------------------------------------------------------------ the vortex into the Net
   const vortexN = 1600;
@@ -613,6 +651,8 @@ export function buildSea({ tier }) {
   const pm = { mode: null, morph: 0, persona: 0, waveT: -1 };
   const lisaW = new THREE.Vector3();
   const cindyW = new THREE.Vector3();
+  const lisaR = new THREE.Vector3();
+  const cindyR = new THREE.Vector3();
 
   return {
     group,
@@ -620,21 +660,41 @@ export function buildSea({ tier }) {
     bergHolder,
     pm,
     seedsLocal: (i) => new THREE.Vector3(home[i * 3], home[i * 3 + 1], home[i * 3 + 2]),
-    personaAnchors() {
-      const l = new THREE.Vector3(home[LISA * 3] - 4 * pm.persona, home[LISA * 3 + 1], home[LISA * 3 + 2] + 7 * pm.persona);
-      const c2 = new THREE.Vector3(home[CINDY * 3] + 4 * pm.persona, home[CINDY * 3 + 1], home[CINDY * 3 + 2] + 7 * pm.persona);
+    // rest: where the two seeds will stand once they have slid out, not where they are now (their
+    // words choose a side by that; the two answers live in vectors of their own)
+    personaAnchors(rest = false) {
+      const k = rest ? 1 : pm.persona;
+      const l = new THREE.Vector3(home[LISA * 3] - 4 * k, home[LISA * 3 + 1], home[LISA * 3 + 2] + 7 * k);
+      const c2 = new THREE.Vector3(home[CINDY * 3] + 4 * k, home[CINDY * 3 + 1], home[CINDY * 3 + 2] + 7 * k);
       sun.updateMatrixWorld();
-      return [lisaW.copy(l).applyMatrix4(sun.matrixWorld), cindyW.copy(c2).applyMatrix4(sun.matrixWorld)];
+      return [(rest ? lisaR : lisaW).copy(l).applyMatrix4(sun.matrixWorld), (rest ? cindyR : cindyW).copy(c2).applyMatrix4(sun.matrixWorld)];
     },
     setMode(mode) {
       pm.mode = pm.mode === mode ? null : mode;
       if (pm.mode === 'wave') pm.waveT = 0;
       return pm.mode;
     },
+    // the same, without the toggle: the mode that belongs to the key point being read (or none)
+    setModeTo(mode) {
+      if (pm.mode === (mode || null)) return;
+      pm.mode = mode || null;
+      if (pm.mode === 'wave') pm.waveT = 0;
+    },
     setPx(px) {
       su.uPx.value = px;
     },
-    update(t, dt, env, activeNo) {
+    // A ping has begun on one of the sea's things (main.js; hit names it, see world/tap.js). The
+    // thing answers through a value that update() already eases back to where it belongs, so there
+    // is nothing here to undo. The modes of article 12 are not touched. m: how much (less where
+    // motion is reduced).
+    tap(hit, m = 1) {
+      if (hit === 'clam') hinge.rotation.x += 0.16 * m;
+      else if (hit === 'coral') coral.material.uniforms.uHi.value = Math.min(1.4, coral.material.uniforms.uHi.value + 0.7 * m);
+      else if (hit === 'berg') curMat.uniforms.uHi.value = Math.min(1.4, curMat.uniforms.uHi.value + 0.6 * m);
+      else if (hit === 'sun') su.uActive.value = Math.min(1.8, su.uActive.value + 0.7 * m);
+    },
+    // beat: which beat of the article is open where the stop is read in place (ui/beats.js), else -1
+    update(t, dt, env, activeNo, beat = -1) {
       group.visible = env.seaVis;
       bergHolder.visible = env.bergVis;
       snow.visible = env.seaVis && env.under;
@@ -652,18 +712,43 @@ export function buildSea({ tier }) {
       su.uActive.value += ((activeNo === 12 ? 1 : 0) - su.uActive.value) * (1 - Math.exp(-dt * 2));
       diag.material.opacity = frame.material.opacity = Math.max(0, pm.morph * 1.4 - 0.4) * 0.85;
       // shoals: highlight follows time when at the station
-      fish.material.uniforms.uFocus.value = activeNo === 13 ? Math.floor(t / 3) % 3 : -1;
-      shoalLabels.forEach((s) => (s.material.opacity = activeNo === 13 ? 1 : 0.35));
-      // clam opens when you arrive
-      const open = activeNo === 14 ? 0.62 : 0.3;
+      // (Where a stop is read in place, its things answer to the beat that names them, and only
+      // to that one. beat is -1 where it is not: then they behave as they always did on arrival.)
+      // 13: the three shoals are the framework's three shares; read there, they light in turn
+      const at13 = activeNo === 13;
+      const shares = at13 && (beat < 0 || beat === 5);
+      fish.material.uniforms.uFocus.value = shares ? Math.floor(t / 3) % 3 : -1;
+      shoalLabels.forEach((s) => (s.material.opacity = !at13 ? 0.35 : shares ? 1 : 0.6));
+      // The clam opens when you arrive. Where the stop is read in place it opens a little more with
+      // each key point, and the pearl lights at the fourth: the judgment that is not handed over.
+      const at14 = activeNo === 14;
+      const read = at14 && beat >= 0;
+      const lit = !read || beat >= 4;
+      const open = !at14 ? 0.3 : !read ? 0.62 : CLAM_OPEN[Math.min(beat, 4)];
       hinge.rotation.x = THREE.MathUtils.lerp(hinge.rotation.x, -(open + Math.sin(t * 0.6) * 0.05), 1 - Math.exp(-dt * 1.5));
-      pearl.material.emissiveIntensity = activeNo === 14 ? 1.3 + Math.sin(t * 2) * 0.25 : 0.7;
+      // until then the pearl waits, dimmer than it is for a passer-by, so that the fourth point is a change
+      const glow = !at14 ? 0.7 : lit ? 1.3 + Math.sin(t * 2) * 0.25 : 0.5 + beat * 0.07;
+      if (!read) pearl.material.emissiveIntensity = glow;
+      else pearl.material.emissiveIntensity += (glow - pearl.material.emissiveIntensity) * (1 - Math.exp(-dt * 3));
+      const ease = 1 - Math.exp(-dt * 2.2);
+      pearlGlow.scale.x = pearlGlow.scale.y = pearlGlow.scale.x + ((read && lit ? 8 : 6) - pearlGlow.scale.x) * ease;
+      pearlGlow.material.opacity += ((read && !lit ? 0.35 + beat * 0.06 : 1) - pearlGlow.material.opacity) * ease;
       clamLabel.material.opacity = activeNo === 14 ? 1 : 0.4;
-      coral.material.uniforms.uHi.value += ((activeNo === 15 ? 1 : 0) - coral.material.uniforms.uHi.value) * (1 - Math.exp(-dt * 2));
-      coralLabel.material.opacity = activeNo === 15 ? 1 : 0.35;
-      curMat.uniforms.uHi.value += ((activeNo === 16 ? 1 : 0.2) - curMat.uniforms.uHi.value) * (1 - Math.exp(-dt * 2));
-      curLabels.forEach((s) => (s.material.opacity = activeNo === 16 ? 1 : 0.3));
-      bergLabel.material.opacity = activeNo === 16 ? 1 : 0.5;
+      // 15: the lit path is "the next step": key point 2 gives it, and the opening and the close end on it
+      const at15 = activeNo === 15;
+      const step = at15 && (beat < 0 || beat === 0 || beat === 2 || beat === 5);
+      coral.material.uniforms.uHi.value += ((!at15 ? 0 : step ? 1 : 0.4) - coral.material.uniforms.uHi.value) * (1 - Math.exp(-dt * 2));
+      coralLabel.material.opacity = !at15 ? 0.35 : step ? 1 : 0.55;
+      // 16: the six undercurrents are named in the framework; the iceberg itself in the opening
+      const at16 = activeNo === 16;
+      const six = at16 && (beat < 0 || beat === 5);
+      curMat.uniforms.uHi.value += ((!at16 ? 0.2 : six ? 1 : 0.45) - curMat.uniforms.uHi.value) * (1 - Math.exp(-dt * 2));
+      curLabels.forEach((s) => (s.material.opacity = !at16 ? 0.3 : six ? 1 : 0.5));
+      bergLabel.material.opacity = !at16 ? 0.5 : beat <= 0 ? 1 : 0.7;
+      for (const [no, f] of figures) {
+        f.material.opacity += ((activeNo === no ? 1 : 0) - f.material.opacity) * (1 - Math.exp(-dt * 2.5));
+        f.visible = f.material.opacity > 0.01; // an unlit figure is not drawn at all
+      }
     },
   };
 }

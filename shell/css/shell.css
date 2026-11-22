@@ -219,6 +219,133 @@ body.in-world #status { opacity: 1; }
 .cd-step.next { padding: 0 18px; color: var(--c); border-color: color-mix(in srgb, var(--c) 50%, transparent); }
 .cd-step.next:hover { background: color-mix(in srgb, var(--c) 16%, transparent); border-color: var(--c); }
 
+/* ---------------------------------------------------------------- reading in place (js/ui/beats.js)
+   A stop read in six beats has no card. The text stands on the scene, on a dark wash that keeps
+   15px type readable over water and neon. No blur: that is a full-screen pass on a weak GPU.
+   Wide screen (here): the six beats are one column that scrolls, and the wheel over the text
+   reads the article. Narrow screen (the 820px block below): one beat at a time, docked at the bottom. */
+/* The block is close to half of the window (it was 38vw, 440px at most): the article is what the
+   stop is for. main.js moves the picture left by the same share (see "lens shift" there), so the
+   two numbers here and #card's right are repeated in it. */
+:root { --bt-w: min(640px, 45vw); --bt-open: calc(100vw - var(--bt-w) - clamp(52px, 5.5vw, 84px)); }
+#card.bt { width: var(--bt-w); }
+/* the block is a column that may not be taller than the window allows (168px = the top bar above it
+   and as much below): the scrolling text gives way, so a long title never pushes the buttons off */
+.bt-box { --lead: clamp(56px, 26vw - 210px, 240px); position: relative; display: flex; flex-direction: column; max-height: calc(100vh - 168px); padding-left: 22px; border-left: 1px solid color-mix(in srgb, var(--c) 55%, transparent); }
+.bt-box > * { flex: none; }
+.bt-box::before {
+  content: ''; position: absolute; z-index: -1; top: -100vh; bottom: -100vh; left: calc(-1 * var(--lead)); right: -30vw; pointer-events: none;
+  background: linear-gradient(90deg, rgba(3, 6, 8, 0) 0, rgba(3, 6, 8, 0.5) calc(var(--lead) * 0.5), rgba(3, 6, 8, 0.84) calc(var(--lead) * 0.97), rgba(3, 6, 8, 0.9) 100%);
+}
+.bt-where { color: var(--c); }
+.bt-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* the rail: six marks, and the lit one is the beat in view */
+.bt-tabs { display: flex; gap: 4px; margin-top: 16px; }
+.bt-tabs button { position: relative; display: flex; align-items: baseline; justify-content: center; min-width: 40px; min-height: 40px; padding: 4px 0; font-size: 13px; line-height: 1.5; color: var(--ink-3); border-bottom: 2px solid rgba(255, 255, 255, 0.16); transition: color 0.25s, border-color 0.25s; }
+.bt-tabs button b { font-family: var(--display); font-size: 12px; font-weight: 500; letter-spacing: 0.06em; }
+.bt-tabs button span { display: none; }
+.bt-tabs button:hover, .bt-tabs button[aria-selected='true'] { color: var(--ink); }
+.bt-tabs button[aria-selected='true'] { border-bottom-color: var(--c); }
+.bt-tabs button[aria-selected='true'] b { color: var(--c); }
+/* the column: it scrolls by itself (the wheel, a finger, the rail) and fades out at both ends.
+   It is 640px tall where there is room and shrinks where there is not */
+.bt-box > .bt-panels { flex: 0 1 640px; }
+.bt-panels {
+  position: relative; margin-top: 4px; min-height: 120px; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y;
+  padding: 16px 14px 30px 0; scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--c) 40%, transparent) transparent;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 16px, #000 calc(100% - 34px), transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 16px, #000 calc(100% - 34px), transparent 100%);
+}
+.bt-panels:focus-visible { outline: none; box-shadow: inset -2px 0 0 var(--ghost); }
+.bt-panel { min-width: 0; }
+.bt-panel + .bt-panel { margin-top: 26px; padding-top: 24px; border-top: 1px solid rgba(255, 255, 255, 0.09); }
+/* nothing inside a beat fades on a property change */
+.bt-panel, .bt-panel * { transition: none !important; }
+@keyframes bt-in { from { opacity: 0; transform: translateX(12px); } }
+.bt-tldr { font-size: 15px; line-height: 1.8; color: var(--ink); }
+.bt-quote { margin-top: 14px; padding-left: 12px; border-left: 2px solid color-mix(in srgb, var(--c) 70%, transparent); font-family: var(--serif); font-size: 14px; line-height: 1.8; color: var(--ink-2); }
+.bt-h { display: flex; gap: 10px; align-items: baseline; font-size: 18px; font-weight: 700; line-height: 1.45; }
+.bt-h b { flex: none; font-family: var(--display); font-weight: 500; color: var(--c); }
+.bt-p { margin-top: 10px; font-size: 15px; line-height: 1.8; color: var(--ink); }
+.bt-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px 16px; margin-top: 12px; }
+.bt-stat { display: flex; gap: 10px; align-items: baseline; font-size: 13px; line-height: 1.5; color: var(--ink-2); }
+.bt-stat b { flex: none; font-family: var(--display); font-size: 26px; font-weight: 500; line-height: 1; color: var(--c); }
+/* the opening's number: the one that also stands in the scene as a figure of light */
+.bt-lead { grid-template-columns: 1fr; }
+.bt-lead .bt-stat b { font-size: 34px; }
+/* the framework: one grid for the whole list, so the keys' column is as wide as the longest key
+   (up to 6.5em); a list whose keys are whole phrases stacks each key over its words instead */
+.bt-fw { display: grid; grid-template-columns: fit-content(6.5em) 1fr; column-gap: 12px; list-style: none; margin-top: 10px; }
+.bt-fw li { display: contents; }
+.bt-fw li > * { padding: 4px 0; border-top: 1px solid rgba(255, 255, 255, 0.08); font-size: 13px; line-height: 1.5; }
+.bt-fw li b { font-weight: 700; color: var(--ink); }
+.bt-fw li span { color: var(--ink-2); }
+.bt-fw.stack { grid-template-columns: 1fr; }
+.bt-fw.stack li b { padding-bottom: 0; }
+.bt-fw.stack li span { padding-top: 1px; padding-bottom: 6px; border-top: 0; }
+/* Lisa and Cindy in the text: only where the scene has no room for their bubbles (narrow screens) */
+.bt-pm { display: none; }
+.bt-closing { margin-top: 12px; font-family: var(--serif); font-size: 14px; line-height: 1.8; color: var(--ink-2); }
+/* the article in its own words, under each beat */
+.bt-src { margin-top: 14px; padding-left: 14px; border-left: 2px solid color-mix(in srgb, var(--c) 40%, transparent); }
+.bt-src > span { display: block; margin-bottom: 4px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; color: var(--c); }
+.bt-src p { font-family: var(--serif); font-size: 14px; line-height: 1.85; color: var(--ink-2); }
+.bt-src p + p { margin-top: 8px; }
+/* the one way out to the whole article: the brightest thing in the block */
+.bt-more { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; }
+.bt-read { flex: none; display: inline-flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 18px; background: var(--c); color: #061012; font-size: 15px; font-weight: 700; letter-spacing: 0.08em; transition: filter 0.25s; }
+.bt-read em { font-style: normal; font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.04em; opacity: 0.72; }
+.bt-read i { font-style: normal; font-size: 16px; }
+.bt-read:hover { filter: brightness(1.12); }
+.bt-themes { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; font-size: 12px; color: var(--ink-3); }
+.bt-themes button { padding: 5px 10px; border: 1px solid var(--line); font-size: 12px; color: var(--ink-2); transition: color 0.25s, border-color 0.25s; }
+.bt-themes button:hover { border-color: var(--ghost); color: var(--ghost); }
+/* the two beat arrows belong to the narrow layout, where one beat shows at a time */
+.bt-turn { display: none; gap: 6px; }
+.bt-arrow { width: 44px; height: 44px; font-size: 22px; line-height: 1; color: var(--ink-2); border: 1px solid rgba(255, 255, 255, 0.2); transition: background 0.25s, color 0.25s, border-color 0.25s, opacity 0.25s; }
+.bt-arrow:hover { color: var(--c); border-color: var(--c); }
+.bt-arrow.next { border-color: var(--c); color: var(--c); }
+.bt-arrow:disabled { opacity: 0.28; cursor: default; }
+/* where the block is wide enough for it, the text is one size larger (a line is still under 40 characters) */
+@media (min-width: 1200px) {
+  .bt-tldr, .bt-p { font-size: 16px; }
+  .bt-quote, .bt-closing, .bt-src p { font-size: 15px; }
+  .bt-stat, .bt-fw li > * { font-size: 14px; }
+}
+/* a short window: the block hangs under the top bar instead of from the middle, down to 24px from
+   the bottom. translate undoes the -50% of #card's own transform, which keeps its sideways slide. */
+@media (min-width: 821px) and (max-height: 1124px) {
+  #card.bt { top: 72px; translate: 0 50%; }
+  .bt-box { max-height: calc(100vh - 96px); }
+  .bt-tabs { margin-top: 10px; }
+  .bt-more { margin-top: 8px; }
+  #card.bt .cd-nav { margin-top: 8px; padding-top: 8px; }
+}
+/* ...a shorter one gives up the subtitle */
+@media (min-width: 821px) and (max-height: 760px) {
+  #card.bt .cd-sub { display: none; }
+}
+/* ...and a very short one (a phone on its side that is wider than 820px): the author line goes too */
+@media (min-width: 821px) and (max-height: 600px) {
+  .bt-themes { display: none; }
+}
+@media (min-width: 821px) and (max-height: 520px) {
+  #card.bt .cd-auth { display: none; }
+  .bt-panels { min-height: 72px; }
+}
+/* the hint about reading sits over the scene, not over the block's own buttons */
+@media (min-width: 821px) {
+  #card.bt.show ~ #toast { left: calc(var(--bt-open) / 2); }
+  /* article 12's count stands over the middle of the open part too, not under the text */
+  body:has(#card.bt.show) .pm-count { left: calc(var(--bt-open) / 2); }
+}
+/* A window that is wide but not very (a tablet on its side, a small laptop): the open part is
+   narrow, and what stands at the top left of the scene (a number of light, a label) would run into
+   the zone's name. The name gives way while a stop is read: the text block names the chapter. */
+@media (min-width: 821px) and (max-width: 1199px) {
+  body.in-world:has(#card.bt.show) #zone { opacity: 0; }
+}
+
 /* decode effect */
 .dec { display: inline; }
 .dec .g { color: var(--c); opacity: 0.8; font-family: var(--mono); }
@@ -244,6 +371,10 @@ body.in-world #status { opacity: 1; }
   opacity: 0; transform: translateX(-12px); pointer-events: none; transition: opacity 0.4s, transform 0.5s var(--ease);
 }
 body.ghost-on #ghost { opacity: 1; transform: none; pointer-events: auto; }
+/* the panel's own way out: the X the other panels have, tucked into this small box's corner
+   (the words beside it leave it room) */
+#ghost .x-close { top: 8px; right: 8px; }
+.gh-head { padding-right: 34px; }
 .gh-head .mono { font-size: 10px; color: var(--ghost); }
 .gh-head p { font-size: 12px; line-height: 1.7; color: var(--ink-2); margin-top: 8px; }
 .gh-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
@@ -270,8 +401,10 @@ body.ghost-on #ghost { opacity: 1; transform: none; pointer-events: auto; }
 .pm-bubble q { display: block; margin-top: 8px; font-family: var(--serif); }
 .pm-bubble .ord { margin-top: 8px; font-size: 11px; color: var(--ink-3); }
 .pm-bubble .ord i { font-style: normal; font-family: var(--mono); color: var(--model); margin: 0 3px 0 6px; }
-.pm-count { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); text-align: center; opacity: 0; transition: opacity 0.6s; }
-.pm-count.show { opacity: 1; }
+.pm-count { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); text-align: center; opacity: 0; transition: opacity 0.6s, left 0s 0.6s; }
+.pm-count.show { opacity: 1; transition: opacity 0.6s; }
+/* (centred in the open part it would stand under the threads panel: it gives way to it) */
+body.ghost-on .pm-count { opacity: 0; }
 .pm-count b { display: block; font-family: var(--display); font-weight: 300; font-size: clamp(54px, 7vw, 96px); color: var(--model); text-shadow: 0 0 30px rgba(242, 169, 167, 0.4); }
 .pm-count span { font-size: 14px; color: var(--ink-2); }
 .pm-stats { position: absolute; left: clamp(20px, 5vw, 70px); top: 50%; transform: translateY(-50%); width: min(300px, 40vw); opacity: 0; transition: opacity 0.6s; }
@@ -336,13 +469,23 @@ body.ghost-on #ghost { opacity: 1; transform: none; pointer-events: auto; }
 .rd-page img { width: 100%; height: 100%; object-fit: contain; opacity: 0; transition: opacity 0.3s; }
 .rd-page img.ok { opacity: 1; }
 .rd-page.blank { background: transparent; box-shadow: none; }
+.rd-page:not(.blank) { cursor: zoom-in; }
+/* one page at reading size: the stage scrolls both ways (a finger pans it; pinch stays off) */
+#reader.zoom .rd-stage { display: block; overflow: auto; padding: 0 12px; touch-action: pan-x pan-y; overscroll-behavior: contain; }
+#reader.zoom .rd-spread { display: block; width: max-content; height: auto; max-height: none; margin: 0 auto; }
+/* (never smaller than the page it was zoomed from: 1.3 times the fitted width on a very large screen) */
+#reader.zoom .rd-page { width: max(min(1201px, 230vw), calc(min(44vw, (100vh - 150px) * 0.75) * 1.3)); height: auto; max-width: none; cursor: zoom-out; }
+#reader.zoom .rd-nav { background: rgba(2, 4, 5, 0.7); }
+#reader.zoom .rd-next { right: 24px; }
+.rd-zoom { flex: none; min-height: 36px; padding: 0 14px; border: 1px solid var(--line); font-size: 13px; letter-spacing: 0.08em; color: var(--ghost); }
+.rd-zoom[aria-pressed='true'] { background: var(--ghost); color: #061012; }
 .rd-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 48px; height: 80px; font-size: 32px; color: var(--ink-2); }
 .rd-nav:hover { color: var(--ghost); }
 .rd-prev { left: 8px; }
 .rd-next { right: 8px; }
 .rd-bottom { display: flex; align-items: center; gap: 18px; padding: 14px 24px 20px; }
-.rd-bottom input { flex: 1; accent-color: var(--ghost); }
-.rd-bottom .mono { font-size: 11px; color: var(--ink-2); }
+.rd-bottom input { flex: 1; min-width: 0; accent-color: var(--ghost); }
+.rd-bottom .mono { font-size: 11px; color: var(--ink-2); white-space: nowrap; }
 
 #index { position: fixed; inset: 0; z-index: 44; background: rgba(3, 6, 8, 0.97); opacity: 0; visibility: hidden; transition: opacity 0.4s, visibility 0s 0.4s; }
 #index.show { opacity: 1; visibility: visible; transition: opacity 0.4s; }
@@ -388,7 +531,7 @@ body.ghost-on #ghost { opacity: 1; transform: none; pointer-events: auto; }
 
 #toast {
   position: fixed; left: 50%; bottom: 54px; transform: translate(-50%, 10px); z-index: 60; padding: 10px 18px; font-size: 13px;
-  background: var(--panel); border: 1px solid var(--line); opacity: 0; pointer-events: none; transition: opacity 0.4s, transform 0.4s; white-space: nowrap;
+  background: var(--panel); border: 1px solid var(--line); opacity: 0; pointer-events: none; transition: opacity 0.4s, transform 0.4s, left 0s 0.4s; white-space: nowrap;
 }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
 
@@ -420,6 +563,66 @@ body.panel-open #toast { opacity: 0 !important; }
   #toast { bottom: auto; top: 128px; white-space: normal; text-align: center; width: max-content; max-width: calc(100vw - 32px); }
   .cd-nav { margin-top: 12px; padding-top: 10px; }
   .cd-step.next { flex: 1; }
+  /* reading in place: the text is docked at the bottom, one beat at a time; it never scrolls,
+     because up / down on it is the dive. Sideways turns the beats. */
+  #card.bt { left: 0; right: 0; bottom: 0; width: auto; }
+  .bt-box { display: grid; max-height: none; grid-template-columns: 1fr auto; grid-template-areas: 'head head' 'text text' 'tabs read' 'nav nav'; padding: 12px 18px calc(10px + env(safe-area-inset-bottom, 0px)); border-left: 0; }
+  .bt-head { grid-area: head; }
+  .bt-panels { grid-area: text; }
+  .bt-tabs { grid-area: tabs; align-self: center; justify-self: start; }
+  .bt-more { grid-area: read; align-self: center; margin-top: 6px; }
+  #card.bt .cd-nav { grid-area: nav; }
+  .bt-box::before { top: -64px; bottom: 0; left: 0; right: 0; background: linear-gradient(0deg, rgba(3, 6, 8, 0.95) 0, rgba(3, 6, 8, 0.9) calc(100% - 64px), rgba(3, 6, 8, 0) 100%); }
+  #card.bt .cd-title { font-size: 21px; margin-top: 8px; }
+  #card.bt .cd-sub { display: none; }
+  #card.bt .cd-auth { margin-top: 6px; }
+  .bt-box:not([data-beat='0']) .cd-auth { display: none; }
+  .bt-panels { min-height: 0; margin-top: 12px; padding: 0; overflow: visible; touch-action: auto; -webkit-mask-image: none; mask-image: none; }
+  .bt-panel + .bt-panel { margin-top: 0; padding-top: 0; border-top: 0; }
+  .bt-panel[hidden] { display: none; }
+  .bt-panel:not([hidden]) { animation: bt-in 0.45s var(--ease); }
+  .bt-turn { display: flex; }
+  /* the passage of the article is one line until it is tapped */
+  .bt-src { margin-top: 8px; padding-left: 10px; }
+  .bt-src p { font-size: 13px; line-height: 1.7; }
+  .bt-src:not(.open) { display: flex; gap: 8px; align-items: baseline; }
+  .bt-src:not(.open) > span { flex: none; margin: 0; }
+  .bt-src:not(.open) p { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bt-src:not(.open) p + p { display: none; }
+  .bt-tldr, .bt-p { line-height: 1.7; }
+  .bt-quote { margin-top: 10px; font-size: 13px; line-height: 1.7; }
+  .bt-quote:not(.open) { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .bt-h { font-size: 16px; }
+  .bt-p { margin-top: 8px; }
+  .bt-fw { margin-top: 6px; }
+  .bt-fw li > * { padding: 3px 0; }
+  .bt-fw.stack li span { padding-bottom: 4px; }
+  /* what is long is folded until it is tapped: a framework whose keys are phrases shows the keys,
+     Lisa and Cindy show one line each, and an opening that names a number keeps the quote to one line */
+  .bt-fw.stack:not(.open) li span { display: none; }
+  .bt-fw.stack:not(.open) li b { padding-bottom: 3px; }
+  .bt-fw.stack:not(.open)::after { content: '…'; color: var(--ink-3); line-height: 1; }
+  .bt-pm:not(.open) q { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bt-panel:has(.bt-lead) > .bt-src { display: none; }
+  .bt-panel:has(.bt-lead) > .bt-quote:not(.open) { -webkit-line-clamp: 1; }
+  .bt-lead .bt-stat b { font-size: 28px; }
+  .bt-pm { display: grid; gap: 6px; margin-top: 8px; }
+  .bt-pm p { font-size: 13px; line-height: 1.6; color: var(--ink-2); }
+  .bt-pm b { margin-right: 8px; font-family: var(--display); font-size: 15px; font-weight: 500; color: var(--c); }
+  .bt-pm q { display: block; font-family: var(--serif); color: var(--ink); }
+  body:has(#card.bt) .pm-bubble { display: none; }
+  .bt-stats { margin-top: 8px; }
+  .bt-themes { display: none; }
+  .bt-tabs { gap: 3px; margin-top: 6px; }
+  .bt-tabs button { width: 24px; min-width: 0; min-height: 40px; padding: 0; border-bottom: 0; font-size: 0; }
+  .bt-tabs button b { display: none; }
+  .bt-tabs button::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 3px; margin-top: -1.5px; background: rgba(255, 255, 255, 0.22); }
+  .bt-tabs button[aria-selected='true']::after { background: var(--c); }
+  .bt-read { min-height: 44px; padding: 0 14px; font-size: 14px; }
+  .bt-read i { display: none; }
+  #card.bt .cd-nav { margin-top: 6px; padding-top: 8px; }
+  #card.bt .cd-step { padding: 0 6px; }
+  #card.bt .cd-step.next { flex: none; padding: 0 12px; }
   .fn-print { width: min(260px, 60vw); }
   .pm-stats { left: 16px; top: 96px; transform: none; width: calc(100vw - 60px); }
   .rd-stage { padding: 0 8px; }
@@ -428,6 +631,35 @@ body.panel-open #toast { opacity: 0 !important; }
 /* the People Model card is the one tall card: on short screens drop its quote row so it clears the top bar */
 @media (max-width: 820px) and (max-height: 640px), (min-width: 821px) and (max-height: 700px) {
   .cd-tall .cd-row { display: none; }
+}
+/* reading in place on the smallest phones: the page range leaves the button so the six marks fit beside it */
+@media (max-width: 370px) {
+  .bt-read em { display: none; }
+  .bt-arrow { width: 36px; }
+  #card.bt .cd-step.next { padding: 0 8px; }
+  #card.bt .cd-nav { gap: 4px; }
+}
+/* ...on a short one the opening keeps the summary and lets the quote go, so the scene keeps some room */
+@media (max-width: 820px) and (max-height: 640px) {
+  .bt-panel .bt-quote { display: none; }
+}
+/* ...an opened passage stands in place of the digest text on every narrow screen, so the block
+   cannot grow past the top bar; on a short one the passage is also cut where the screen ends
+   (the whole text is one button away) */
+@media (max-width: 820px) {
+  .bt-panel:has(.bt-src.open) > :not(.bt-src):not(.bt-h) { display: none; }
+}
+@media (max-width: 820px) and (max-height: 640px) {
+  .bt-src.open { max-height: calc(100vh - 330px); max-height: calc(100dvh - 330px); overflow: hidden; -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 30px), transparent); mask-image: linear-gradient(180deg, #000 calc(100% - 30px), transparent); }
+}
+/* ...and on a phone turned on its side: marks, button and steps share one row, the framework runs in two columns */
+@media (max-width: 820px) and (max-height: 480px) and (orientation: landscape) {
+  .bt-box { grid-template-columns: 1fr auto auto; grid-template-areas: 'head head head' 'text text text' 'tabs read nav'; column-gap: 12px; }
+  #card.bt .cd-nav { margin-top: 6px; padding-top: 0; border-top: 0; align-self: center; }
+  .bt-read em { display: none; }
+  .bt-fw { display: block; columns: 2; column-gap: 18px; }
+  .bt-fw li { display: grid; grid-template-columns: fit-content(6.5em) 1fr; column-gap: 10px; break-inside: avoid; }
+  .bt-fw.stack li, .bt-fw.stack li > * { display: block; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { transition-duration: 0.01s !important; animation: none !important; }

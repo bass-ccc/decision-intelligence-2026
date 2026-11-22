@@ -155,6 +155,12 @@ function drawSign(g, s, x0, y0, w, h) {
       g.textAlign = 'center';
       g.fillText(s.sub, w / 2, h - inset - 34);
     }
+  } else if (s.figure) {
+    // a number of light: one run of text, fitted to the sign (digits are narrower than a full cell)
+    let size = h * 0.66;
+    g.font = `700 ${size}px "Noto Sans TC", sans-serif`;
+    size *= Math.min(1, (w - inset * 4) / g.measureText(s.text).width);
+    neonText(g, s.text, w / 2, h / 2 + size * 0.03, size, col);
   } else {
     const size = Math.min(h * 0.62, (w - inset * 4) / chars.length);
     chars.forEach((ch, i) => neonText(g, ch, w / 2 + (i - (chars.length - 1) / 2) * size, h / 2, size * 0.9, col));

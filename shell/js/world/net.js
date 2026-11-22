@@ -3,7 +3,7 @@ import { rng, GLSL_NOISE, COLORS, FOG_ADD } from '../core/util.js';
 import { textPlaneTexture } from '../core/textures.js';
 import { HEAD, HEAD_S, NET_FLOOR, SEA_FLOOR, VORTEX } from './layout.js';
 import { shared } from './city.js';
-import { glowTexture } from './sea.js';
+import { glowTexture, figure } from './sea.js';
 
 // 03 A.I · the Net. Below the sea floor the world turns into data: a grid to the
 // horizon, towers of falling glyphs — and in the middle a shell being built.
@@ -55,7 +55,7 @@ function sprite(text, sub, color, scale = 1) {
   return s;
 }
 
-export function buildNet({ tier }) {
+export function buildNet({ tier, lights = {} }) {
   const group = new THREE.Group();
   const r = rng(303);
   const cyan = new THREE.Color(COLORS.ai);
@@ -99,13 +99,17 @@ export function buildNet({ tier }) {
       depthWrite: false,
       uniforms: { uC: { value: HEAD.clone() } },
       vertexShader: `varying vec3 vW;\n#include <fog_pars_vertex>\nvoid main(){ vec4 wp = modelMatrix * vec4(position,1.0); vW = wp.xyz; vec4 mvPosition = viewMatrix * wp; gl_Position = projectionMatrix * mvPosition;\n#include <fog_vertex>\n}`,
-      fragmentShader: `uniform float uTime; uniform vec3 uC; varying vec3 vW;\n#include <fog_pars_fragment>\nfloat line(float x, float w){ float f = abs(fract(x - 0.5) - 0.5); float d = fwidth(x); return 1.0 - smoothstep(w * d, (w + 1.0) * d, f); }\nvoid main(){
+      fragmentShader: `uniform float uTime; uniform vec3 uC; uniform vec4 uPing; uniform float uPingK; uniform float uPingA; uniform float uPingM; varying vec3 vW;\n#include <fog_pars_fragment>\nfloat line(float x, float w){ float f = abs(fract(x - 0.5) - 0.5); float d = fwidth(x); return 1.0 - smoothstep(w * d, (w + 1.0) * d, f); }\nvoid main(){
         vec2 p = vW.xz / 12.0;
         float l = max(line(p.x, 0.6), line(p.y, 0.6));
         float big = max(line(vW.x / 96.0, 1.0), line(vW.z / 96.0, 1.0));
         float d = length(vW.xz - uC.xz);
         float ring = smoothstep(4.0, 0.0, abs(mod(d - uTime * 18.0, 160.0) - 80.0));
         vec3 c = vec3(0.15, 0.7, 0.8) * l * 0.12 + vec3(0.3, 0.9, 1.0) * big * 0.22 + vec3(0.4, 1.0, 0.9) * ring * l * 0.9;
+        // the ping (main.js): from the floor under the clicked point a ring runs out along the lines,
+        // far and fast (slower where motion is reduced)
+        float pr = smoothstep(6.0, 0.0, abs(length(vW.xz - uPing.xz) - uPingA * (60.0 + 80.0 * uPingM))) * uPingK;
+        c += vec3(0.4, 1.0, 0.9) * pr * (l * 0.9 + big * 0.6 + 0.03);
         c *= 1.0 - smoothstep(120.0, 900.0, d);
         gl_FragColor = vec4(c, 1.0);
         #include <fog_fragment>
@@ -129,9 +133,12 @@ export function buildNet({ tier }) {
       blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
       uniforms: { tGlyph: { value: glyphs } },
-      vertexShader: `attribute vec4 aCol; varying vec2 vUv; varying vec4 vCol;\n#include <fog_pars_vertex>\nvoid main(){
+      vertexShader: `attribute vec4 aCol; uniform vec4 uPing; uniform float uPingK; uniform float uPingA; uniform float uPingM; varying vec2 vUv; varying vec4 vCol; varying float vPing;\n#include <fog_pars_vertex>\nvoid main(){
         vUv = uv; vCol = aCol;
         vec3 base = (instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+        // the ping (main.js): the ring on the floor lifts each tower as it passes its foot
+        float pd = length(base.xz - uPing.xz) - uPingA * (60.0 + 80.0 * uPingM);
+        vPing = uPingK * uPingM * exp(-pd * pd * 0.004);
         vec3 sc = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), 1.0);
         vec3 toCam = cameraPosition - base; toCam.y = 0.0; toCam = normalize(toCam);
         vec3 side = vec3(toCam.z, 0.0, -toCam.x);
@@ -140,7 +147,7 @@ export function buildNet({ tier }) {
         gl_Position = projectionMatrix * mvPosition;
         #include <fog_vertex>
       }`,
-      fragmentShader: `uniform sampler2D tGlyph; uniform float uTime; varying vec2 vUv; varying vec4 vCol;\n#include <fog_pars_fragment>\nfloat h1(float p){ p = fract(p * 0.1031); p *= p + 33.33; p *= p + p; return fract(p); }\nvoid main(){
+      fragmentShader: `uniform sampler2D tGlyph; uniform float uTime; varying vec2 vUv; varying vec4 vCol; varying float vPing;\n#include <fog_pars_fragment>\nfloat h1(float p){ p = fract(p * 0.1031); p *= p + 33.33; p *= p + p; return fract(p); }\nvoid main(){
         float rows = vCol.y;
         vec2 g = vec2(vUv.x, vUv.y * rows + uTime * (1.0 + vCol.z * 3.0));
         vec2 cell = floor(g); vec2 f = fract(g);
@@ -148,7 +155,7 @@ export function buildNet({ tier }) {
         float gl = texture2D(tGlyph, (vec2(mod(ch, 16.0), floor(ch / 16.0)) + f) / 16.0).r;
         float head = fract(vCol.x - uTime * (0.05 + vCol.z * 0.08));
         float trail = pow(fract(vUv.y + head), 5.0);
-        vec3 c = mix(vec3(0.2, 1.0, 0.7), vec3(0.4, 0.8, 1.0), vCol.w) * gl * (0.08 + trail * 1.4);
+        vec3 c = mix(vec3(0.2, 1.0, 0.7), vec3(0.4, 0.8, 1.0), vCol.w) * gl * (0.08 + trail * 1.4) * (1.0 + 0.5 * vPing);
         gl_FragColor = vec4(c, 1.0);
         ${FOG_ADD}
       }`,
@@ -441,11 +448,15 @@ export function buildNet({ tier }) {
 
   // part labels
   const partPos = [
-    [0.95, 0.05, 0.75],
+    // 17, the eyes: on the brow, in front of it. It stood to the right of the face, which on a wide
+    // screen is where the text of the stop is (the camera of 17 is close: the face fills the frame).
+    [0.16, 0.5, 1.15],
     [-1.25, 0.45, 0.1],
     [0.95, -0.35, 0.85],
     [1.15, 0.5, -0.5],
-    [-0.75, -0.62, 1.0],
+    // 21, the voice: under the chin. Beside the jaw, where it was, it left the screen of a window
+    // where the text of the stop takes half the width, and of a tall one.
+    [-0.12, -1.0, 1.0],
     [0.65, 0.92, 0.44], // at the temple, under the column of lock labels: above the crown it leaves the top of a phone screen
   ];
   const partLabels = PARTS.map((p, i) => {
@@ -453,6 +464,18 @@ export function buildNet({ tier }) {
     s.position.set(HEAD.x + partPos[i][0] * S, HEAD.y + partPos[i][1] * S, HEAD.z + partPos[i][2] * S);
     group.add(s);
     return s;
+  });
+  // the article's number of light (where it has one), under the label of its part
+  const partFigures = PARTS.map((p, i) => {
+    if (!lights[p.no]) return null;
+    const f = figure(lights[p.no], '#bff1ff');
+    // it shows only at its own stop, where its label faces the reader: the head must not hide it
+    f.material.depthTest = false;
+    f.renderOrder = 5;
+    f.scale.multiplyScalar(0.62);
+    f.position.copy(partLabels[i].position).add(new THREE.Vector3(0, -2.7, 0));
+    group.add(f);
+    return f;
   });
 
   const asm = [0, 0, 0, 0, 0, 0];
@@ -589,7 +612,14 @@ export function buildNet({ tier }) {
         L.label.position.set(HEAD.x + Math.cos(a) * lr, L.ring.position.y + 1.5, HEAD.z + Math.sin(a) * lr);
         L.label.material.opacity = asm[5] * (focus === 5 ? 1 : 0.45);
       });
-      partLabels.forEach((s, i) => (s.material.opacity = (focus === i ? 1 : 0.28) * Math.min(1, asm[i] * 1.5 + 0.15)));
+      // (the label of the eyes stands on the brow: from the camera of 22 that is where the label of
+      // the locks is, so at that stop it is not shown)
+      partLabels.forEach((s, i) => (s.material.opacity = (focus === i ? 1 : focus === 5 && i === 0 ? 0 : 0.28) * Math.min(1, asm[i] * 1.5 + 0.15)));
+      partFigures.forEach((f, i) => {
+        if (!f) return;
+        f.material.opacity += ((focus === i ? Math.min(1, asm[i] * 1.5) : 0) - f.material.opacity) * (1 - Math.exp(-dt * 2.5));
+        f.visible = f.material.opacity > 0.01; // an unlit figure is not drawn at all
+      });
     },
   };
 }

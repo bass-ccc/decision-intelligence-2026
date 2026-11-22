@@ -26,17 +26,21 @@ const DECOR_COLS = ['#ff3d8b', '#ff8a3d', '#3de0ff', '#ff3a3a', '#f4f0e0', '#68f
 
 const SIGN_VERT = /* glsl */ `
 attribute vec4 aRect; attribute vec4 aFx;
-varying vec2 vUv; varying vec4 vRect; varying vec4 vFx;
+uniform vec4 uPing; uniform float uPingK;
+varying vec2 vUv; varying vec4 vRect; varying vec4 vFx; varying float vPing;
 #include <fog_pars_vertex>
 void main() {
   vUv = uv; vRect = aRect; vFx = aFx;
+  // the ping (main.js): how near the pulse's front is to this sign, for the whole sign at once
+  float pd = length((modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz - uPing.xyz) - uPing.w;
+  vPing = uPingK * exp(-pd * pd * 0.06);
   vec4 mvPosition = modelViewMatrix * instanceMatrix * vec4(position, 1.0);
   gl_Position = projectionMatrix * mvPosition;
   #include <fog_vertex>
 }`;
 const SIGN_FRAG = /* glsl */ `
 uniform sampler2D tMap; uniform float uTime; uniform float uDawn; uniform float uActive;
-varying vec2 vUv; varying vec4 vRect; varying vec4 vFx;
+varying vec2 vUv; varying vec4 vRect; varying vec4 vFx; varying float vPing;
 #include <fog_pars_fragment>
 float h1(float p) { p = fract(p * 0.1031); p *= p + 33.33; p *= p + p; return fract(p); }
 void main() {
@@ -46,7 +50,8 @@ void main() {
   if (vFx.z > 1.5) fl = 0.85 + 0.15 * sin(uTime * 60.0 + vFx.x * 20.0);
   // the sign of the article being read is lifted a little, not flooded: it still has to be read
   float act = vFx.w > 0.5 ? 1.0 + 0.25 * step(abs(vFx.w - uActive), 0.1) * (0.8 + 0.2 * sin(uTime * 3.0)) : 1.0;
-  vec3 col = c * vFx.y * fl * act * (1.0 - uDawn * 0.55);
+  // a sign dims as the pulse of a ping passes it, and comes back: a smooth dip, never a flicker
+  vec3 col = c * vFx.y * fl * act * (1.0 - uDawn * 0.55) * (1.0 - 0.45 * vPing);
   gl_FragColor = vec4(col, 1.0);
   #include <fog_fragment>
 }`;
@@ -66,6 +71,7 @@ void main() {
 const WATER_FRAG = /* glsl */ `
 uniform sampler2D tDiffuse; uniform float uTime; uniform float uRain; uniform float uDawn;
 uniform vec3 uSunPos; uniform vec3 uBergPos;
+uniform vec4 uPing; uniform float uPingK; uniform float uPingA; uniform float uPingM; uniform vec3 uStep;
 varying vec4 vUvP; varying vec3 vW;
 #include <fog_pars_fragment>
 ${GLSL_NOISE}
@@ -91,6 +97,34 @@ void main() {
   float t = uTime;
   vec2 n = (vec2(fbm(p * 0.06 + vec2(t * 0.04, 0.0)), fbm(p * 0.06 + vec2(17.0, -t * 0.03))) - 0.5) * 0.9;
   n += ripples(p * 0.85, t) * 0.35 * uRain;
+  // The ping (main.js). Where the pulse's sphere meets the water (y = 0) one ring runs out and
+  // bends the reflections. A click on the water itself is followed by a few more rings, each one a
+  // stride further on, as if something unseen had stepped there (uStep: the stride's direction,
+  // and how many).
+  float crest = 0.0;
+  if (uPingK > 0.001) {
+    float r2 = uPing.w * uPing.w - uPing.y * uPing.y;
+    if (r2 > 0.0) {
+      vec2 d = p - uPing.xz;
+      float r = length(d);
+      float x = r - sqrt(r2);
+      float e = exp(-x * x * 0.9);
+      n += d / max(r, 1e-3) * (sin(x * 4.0) * e * 0.9 * uPingK * uPingM);
+      crest += e * uPingK;
+    }
+    for (int i = 1; i <= 2; i++) {
+      float fi = float(i);
+      float ai = uPingA - 0.24 * fi;
+      if (fi <= uStep.z && ai > 0.0) {
+        vec2 d = p - uPing.xz - uStep.xy * (2.8 * fi);
+        float r = length(d);
+        float x = r - ai * 4.2;
+        float e = exp(-x * x * 1.4) * exp(-ai * 1.8);
+        n += d / max(r, 1e-3) * (sin(x * 5.0) * e * 0.8 * uPingK * uPingM);
+        crest += e * 0.6 * uPingK;
+      }
+    }
+  }
   vec3 V = normalize(cameraPosition - vW);
   float fres = 0.3 + 0.7 * pow(1.0 - max(V.y, 0.0), 4.0);
   vec4 uv = vUvP;
@@ -108,11 +142,14 @@ void main() {
   float gs = exp(-dot(p - uSunPos.xz, p - uSunPos.xz) / 2600.0);
   float gb = exp(-dot(p - uBergPos.xz, p - uBergPos.xz) / 1800.0);
   col += vec3(0.95, 0.5, 0.52) * gs * 0.55 * (0.8 + 0.2 * sin(t * 1.3)) * (0.6 + 0.4 * fbm(p * 0.08 + t * 0.1)) + vec3(0.3, 0.8, 0.85) * gb * 0.1;
+  // (a faint crest, so that a ring also reads on water that has nothing to reflect)
+  col += vec3(0.35, 0.95, 0.8) * crest * 0.05;
   gl_FragColor = vec4(col, 1.0);
   #include <fog_fragment>
 }`;
 
-export function buildCanal({ tier, boxes, W, H }) {
+// lights: { article number: the number that stands in the scene as a neon blade } (see ui/beats-src.js)
+export function buildCanal({ tier, boxes, W, H, lights = {} }) {
   const group = new THREE.Group();
   const r = rng(88);
   const C = CANAL;
@@ -129,6 +166,7 @@ export function buildCanal({ tier, boxes, W, H }) {
       tDiffuse: { value: reflector.getRenderTarget().texture },
       textureMatrix: reflector.material.uniforms.textureMatrix,
       uRain: { value: 1 },
+      uStep: { value: new THREE.Vector3() },
       uSunPos: { value: SUN.clone() },
       uBergPos: { value: BERG.clone() },
     }),
@@ -240,6 +278,13 @@ export function buildCanal({ tier, boxes, W, H }) {
     const [text, sub] = SIGN_TEXT[no];
     specs.push({ text, sub, no, color: COLORS.people, w: 3.4, h: 12, vertical: true, station: true });
     place.push({ si: specs.length - 1, side: SIGN_SIDE(i), z: SIGN_Z(i), y: 12.5, w: 3.4, h: 12, no, out: 2.0 });
+    // The article's number, where it has one that reads alone: a blade that reaches out over the
+    // water from the foot of the sign. Same mesh, same atlas, so it costs no draw call, and the
+    // canal mirrors it. It answers to the article like the sign does (the no in aFx).
+    if (lights[no]) {
+      specs.push({ text: String(lights[no]), color: COLORS.people, w: 5.2, h: 2.3, figure: true, station: true });
+      place.push({ si: specs.length - 1, side: SIGN_SIDE(i), z: SIGN_Z(i), y: 8.3, w: 5.2, h: 2.3, no, out: 2.0 + 3.4 + 0.3, blade: true });
+    }
   }
   const decorN = Math.round(90 * Math.max(0.6, tier.city));
   for (let i = 0; i < decorN; i++) {
@@ -306,11 +351,13 @@ export function buildCanal({ tier, boxes, W, H }) {
       rect.set(R, fi * 4);
       // brightness: the bloom pass turns anything far above 1.1 into a wide haze, and a hazy sign
       // cannot be read. The article signs (five dense characters) stay lower than the shop signs.
-      fx.set([r(), p.no ? 1.6 : 1.9, p.flick || 0, p.no || 0], fi * 4);
+      fx.set([p.blade ? 0 : r(), p.no ? 1.6 : 1.9, p.flick || 0, p.no || 0], fi * 4);
       fi++;
     }
     m.compose(pos.set(x, p.y, p.z), q.identity(), sc.set(p.w + 0.2, p.h + 0.2, 0.3));
     cab.setMatrixAt(ci++, m);
+    // a blade hangs off its sign and has no bracket (or anchor) of its own
+    if (p.blade) return;
     // bracket back to the wall
     const bl = p.out + 0.1;
     m.compose(pos.set(p.side * (C.walk - bl / 2), p.y + p.h / 2 - 0.4, p.z), q.identity(), sc.set(bl, 0.12, 0.12));
@@ -361,6 +408,11 @@ export function buildCanal({ tier, boxes, W, H }) {
     stationSigns,
     setActive(no) {
       faces.material.uniforms.uActive.value = no || 0;
+    },
+    // a ping has begun (main.js): n more rings follow the first across the water, each a stride
+    // further on in the direction of angle (0 when the click was not on the water)
+    tap(n, angle) {
+      rmat.uniforms.uStep.value.set(Math.cos(angle), Math.sin(angle), n);
     },
     resize(w, h) {
       reflector.getRenderTarget().setSize(Math.round(w * tier.reflect), Math.round(h * tier.reflect));

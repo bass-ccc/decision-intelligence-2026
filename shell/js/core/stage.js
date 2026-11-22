@@ -57,6 +57,7 @@ uniform vec3 uLift; uniform vec3 uGain; uniform float uSat;
 uniform float uCA; uniform float uWater; uniform float uGlitch; uniform float uCamo; uniform float uLensRain;
 uniform float uGhost; uniform float uDigit; uniform vec3 uGhostCol; uniform float uGlyphRow; uniform float uGlyphRows; uniform float uGlyphCount;
 uniform float uFade; uniform float uFlash; uniform vec3 uFlashCol; uniform float uScan; uniform float uPitch;
+uniform vec4 uPing; uniform float uPingK; uniform vec4 uPingProj; uniform vec4 uPingFx; uniform vec3 uPingCol; uniform vec2 uPingGeo; uniform float uPingSeed;
 varying vec2 vUv;
 
 vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
@@ -111,6 +112,36 @@ void main() {
     vec2 gr = vec2(fbm(cp + vec2(e, 0.0)) - n, fbm(cp + vec2(0.0, e)) - n) / e;
     uv += gr * 0.018 * hidden;
     camoRim = (1.0 - smoothstep(0.0, 0.07, abs(n - thr))) * step(0.02, uCamo);
+  }
+  // The ping: one click sends one pulse out from the clicked point (main.js). uPing is that point
+  // in view space and the pulse's radius; the front is where that sphere meets the picture's own
+  // depth, so it runs over walls, fish and stone. Everything deeper than the point is taken as one
+  // flat sheet at the point's depth (uPingGeo.x): there is always a clean ring round the cursor,
+  // on empty space too, and things that write no depth cannot break it.
+  float pF = 0.0; // the front: a line
+  float pG = 0.0; // a soft glow round the line
+  float pB = 0.0; // the wake behind it
+  float pD = 0.0; // this pixel's own depth
+  if (uPingK > 0.001) {
+    pD = linDepth(texture2D(tDepth, vUv).x);
+    float dz = min(pD, uPingGeo.x);
+    vec3 rel = vec3((vUv * 2.0 - 1.0) * uPingProj.xy + uPingProj.zw, -1.0) * dz - uPing.xyz;
+    float dist = length(rel);
+    float lag = uPing.w - dist; // above 0 behind the front
+    // The line is two to three pixels wide at any distance. A slope widens it in world units so
+    // that it stays that wide on screen (water seen at a low angle: up to 24 pixel-widths of
+    // distance). A jump in depth does not: or every silhouette near the front would light up.
+    float pxw = dz * 2.0 * uPingProj.y / uRes.y;
+    float hw = clamp(fwidth(dist) * 1.2, pxw * 1.2, pxw * (fwidth(dz) > 0.12 * dz ? 1.5 : 24.0));
+    pF = 1.0 - smoothstep(hw * 0.4, hw, abs(lag));
+    float gw = min(hw, pxw * 6.0);
+    pG = exp(-lag * lag / (gw * gw * 40.0));
+    // an echo: a fainter front at six tenths of the radius
+    pF += uPingFx.w * 0.5 * (1.0 - smoothstep(hw * 0.4, hw, abs(lag - 0.4 * uPing.w)));
+    pB = smoothstep(0.0, hw, lag) * (1.0 - smoothstep(0.0, uPingGeo.y, lag));
+    // the picture bends where the front passes, like air over something hot
+    float bx = lag / (uPingGeo.y * 0.3);
+    uv += normalize(rel.xy + 1e-5) * vec2(1.0 / aspect, 1.0) * (uPingFx.x * uPingK * 0.011 * 2.33 * bx * exp(-bx * bx));
   }
 
   // chromatic fringe (stronger toward the edges)
@@ -175,6 +206,42 @@ void main() {
 
   // camouflage rim light
   col += vec3(0.55, 0.95, 0.85) * camoRim * 0.25;
+
+  // the ping's own light: the front; the outlines of what its wake is passing over (depth edges);
+  // and, in the Net, the wake as a ring of the book's glyph cells.
+  // (Texture reads inside the wake are textureLod: they sit behind a test that differs per pixel.)
+  if (uPingK > 0.001) {
+    vec3 add = uPingCol * (pF * 0.75 + pG * 0.14);
+    if (pB > 0.004) {
+      vec2 px = 1.0 / uRes;
+      if (uPingFx.z > 0.001) {
+        // (at uv, where the picture itself was read: the bend above moves both, so an outline
+        // stays on its thing)
+        float d0 = linDepth(textureLod(tDepth, uv, 0.0).x);
+        float dl = linDepth(textureLod(tDepth, uv - vec2(px.x, 0.0), 0.0).x);
+        float dr = linDepth(textureLod(tDepth, uv + vec2(px.x, 0.0), 0.0).x);
+        float du = linDepth(textureLod(tDepth, uv + vec2(0.0, px.y), 0.0).x);
+        float dd = linDepth(textureLod(tDepth, uv - vec2(0.0, px.y), 0.0).x);
+        float lap = abs(dl + dr + du + dd - 4.0 * d0) / max(d0, 0.001);
+        add += uPingCol * (smoothstep(0.015, 0.08, lap) * (1.0 - smoothstep(300.0, 900.0, d0)) * pB * uPingFx.z * 0.8);
+      }
+      if (uPingFx.y > 0.001) {
+        vec2 frag = vUv * uRes;
+        vec2 cell = floor(frag / uCell);
+        vec2 cuv = (cell + 0.5) * uCell / uRes;
+        vec3 cc = grade(textureLod(tScene, cuv, 0.0).rgb + textureLod(tBloom, cuv, 0.0).rgb * 1.2);
+        float lm = clamp(pow(dot(cc, vec3(0.299, 0.587, 0.114)) * 2.2, 0.7), 0.0, 0.999);
+        // Every cell of the ring holds a glyph, also where the picture behind it is dark; and never
+        // the heaviest ones, which on something bright (the marble head) would close into a solid disc.
+        float gi = floor(clamp(0.22 + 0.3 * lm + 0.34 * hash(cell + uPingSeed), 0.0, 0.78) * uGlyphCount);
+        vec2 local = fract(frag / uCell);
+        float g = textureLod(tGlyph, vec2((gi + local.x) / uGlyphCount, 1.0 - (uGlyphRow + 1.0 - local.y) / uGlyphRows), 0.0).r;
+        col *= 1.0 - 0.55 * pB * uPingFx.y * uPingK;
+        add += uPingCol * (g * (0.4 + 0.45 * lm) * pB * uPingFx.y);
+      }
+    }
+    col += add * uPingK;
+  }
 
   // scanlines, vignette, grain
   col *= 1.0 - uScan * 0.08 * step(0.5, fract(gl_FragCoord.y * 0.5));
@@ -302,6 +369,14 @@ export class Stage {
       uFlashCol: { value: new THREE.Color(0.8, 1, 0.95) },
       uScan: { value: 1 },
       uPitch: { value: 0 },
+      // the ping (main.js writes these; uPingK is 0 while there is none, the others keep their last values)
+      uPing: { value: new THREE.Vector4() }, // xyz: the clicked point in view space; w: the radius now
+      uPingK: { value: 0 }, // strength
+      uPingProj: { value: new THREE.Vector4(1, 1, 0, 0) }, // rebuilds a view ray from a uv (lens shift and view offset included)
+      uPingFx: { value: new THREE.Vector4() }, // bend, glyph cells, outlines, echo
+      uPingCol: { value: new THREE.Color('#68F0C4') },
+      uPingGeo: { value: new THREE.Vector2(100, 6) }, // the point's depth, the wake's width
+      uPingSeed: { value: 0 }, // reshuffles the glyph cells
     };
     this.compMat = pm(COMPOSITE_FRAG, this.u);
     this.quad = new FullScreenQuad(null);

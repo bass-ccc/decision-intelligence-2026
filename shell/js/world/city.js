@@ -12,6 +12,13 @@ export const shared = {
   uDawn: { value: 0 },
   uDawnDir: { value: new THREE.Vector3(0, 0.1, -1) },
   uGhost: { value: 0 },
+  // The ping (main.js): a pulse that grows from a clicked point. Every shader material built with
+  // this object has these, so the canal's water and signs, the sea's fish and snow and the Net's
+  // grid can answer to it.
+  uPing: { value: new THREE.Vector4() }, // xyz: the point in the world; w: the pulse's radius now
+  uPingK: { value: 0 }, // its strength, 0 while there is none
+  uPingA: { value: 0 }, // its age in seconds
+  uPingM: { value: 1 }, // how far things are moved by it (less where motion is reduced)
 };
 
 function fogUniforms(extra) {
@@ -123,7 +130,7 @@ void main() {
   #include <fog_vertex>
 }`;
 const HOLO_FRAG = /* glsl */ `
-uniform sampler2D tMap; uniform vec4 uRect; uniform vec3 uTint; uniform float uGain; uniform float uSeed; uniform float uInk;
+uniform sampler2D tMap; uniform vec4 uRect; uniform vec3 uTint; uniform float uGain; uniform float uSeed; uniform float uInk; uniform float uFill;
 uniform float uTime; uniform float uDawn; uniform float uOn;
 varying vec2 vUv;
 #include <fog_pars_fragment>
@@ -137,9 +144,11 @@ void main() {
   vec3 c = texture2D(tMap, tuv).rgb;
   if (uInk > 0.5) {
     // a printed page as light: the paper turns to air, ink and colour glow
+    // (uFill: how much light a block of flat colour gives. At 1.3 a filled box is a solid slab of
+    // light that hides what is behind it; well under 1 it is a tinted pane the city shows through)
     float lum = dot(c, vec3(0.3, 0.59, 0.11));
     float sat = max(max(c.r, c.g), c.b) - min(min(c.r, c.g), c.b);
-    c = uTint * pow(1.0 - lum, 1.4) * 1.25 + c * smoothstep(0.08, 0.4, sat) * 1.3;
+    c = uTint * pow(1.0 - lum, 1.4) * 1.25 + c * smoothstep(0.08, 0.4, sat) * uFill;
   }
   float scan = 0.72 + 0.28 * sin(vUv.y * 420.0 + t * 6.0);
   float band = 0.85 + 0.15 * smoothstep(0.0, 0.02, abs(fract(vUv.y * 0.7 - t * 0.12) - 0.5));
@@ -152,7 +161,7 @@ void main() {
   ${FOG_ADD}
 }`;
 
-export function holoMaterial(tex, rect, tint, gain, seed, ink = 1) {
+export function holoMaterial(tex, rect, tint, gain, seed, ink = 1, fill = 1.3) {
   return new THREE.ShaderMaterial({
     uniforms: fogUniforms({
       tMap: { value: tex },
@@ -162,6 +171,7 @@ export function holoMaterial(tex, rect, tint, gain, seed, ink = 1) {
       uSeed: { value: seed },
       uOn: { value: 1 },
       uInk: { value: ink },
+      uFill: { value: fill },
     }),
     vertexShader: HOLO_VERT,
     fragmentShader: HOLO_FRAG,
@@ -541,7 +551,9 @@ export function buildCity({ tier, atlasTex, atlas, openerTex, coverTex }) {
   [[BILL1, 6, '#bff8ff'], [BILL2, 12, '#ffe6d0']].forEach(([pos, page, tint], i) => {
     const H = 26;
     const tex = openerTex(page);
-    const mat = holoMaterial(tex, [0, 0, 1, 1], tint, 1.15, i * 0.37);
+    // (their boxes of flat green are panes, not slabs: the towers behind show through them, and
+    // the words printed on the box can be read)
+    const mat = holoMaterial(tex, [0, 0, 1, 1], tint, 1.15, i * 0.37, 1, 0.48);
     const pl = new THREE.Mesh(new THREE.PlaneGeometry(H * 0.75, H), mat);
     pl.position.copy(pos);
     const to = new THREE.Vector3(ROOF.x + 8, pos.y, ROOF.z - 6).sub(pos);
@@ -551,8 +563,10 @@ export function buildCity({ tier, atlasTex, atlas, openerTex, coverTex }) {
     const beam = projectorBeam(tint, H * 0.45, 40);
     beam.position.copy(pos).add(new THREE.Vector3(0, 24, 0));
     group.add(beam);
-    billboards.push({ plane: pl, mat });
+    billboards.push({ plane: pl, mat, no: i + 1 });
   });
+  // the page of the article being read glows a little more than the other
+  let activeNo = 0;
 
   // --- the book itself, solid, hanging over the canal (built even if its cover failed to load)
   const book = buildBook(coverTex, tier);
@@ -564,9 +578,14 @@ export function buildCity({ tier, atlasTex, atlas, openerTex, coverTex }) {
     billboards,
     book,
     fit: book.fit,
+    setActive(no) {
+      activeNo = no;
+    },
     update(t, env) {
       group.visible = env.cityVis;
-      if (group.visible) book.update(t);
+      if (!group.visible) return;
+      book.update(t);
+      for (const b of billboards) b.mat.uniforms.uGain.value += ((b.no === activeNo ? 1.42 : 1.15) - b.mat.uniforms.uGain.value) * 0.06;
     },
   };
 }
