@@ -650,7 +650,12 @@ export class UI {
     const set = (fig, n) => {
       const img = fig.querySelector('img');
       if (!n || n > 196) {
+        // an empty side shows nothing at all: the picture that stood there is let go with its name
+        // (it used to stay "loaded", and showed a broken-picture mark and the last page's number)
         fig.classList.add('blank');
+        img.classList.remove('ok');
+        img.onload = null;
+        img.alt = '';
         img.removeAttribute('src');
         return;
       }
