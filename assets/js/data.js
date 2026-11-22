@@ -9,6 +9,14 @@ export const BOOK = {
   mottoEn: 'INNOVATING TO IMPACT',
   publisher: '電通行銷傳播集團',
   pages: 196,
+  // everyone on the book's own credits page (p. 3), in its order: [role, people]
+  credits: [
+    ['發行人', ['唐心慧']],
+    ['總編輯', ['邵懿文']],
+    ['副總編輯', ['陳介立']],
+    ['執行團隊', ['楊至靜', '張詠琦', '蔡孟軒', '陳靖偉', '陳憶雯', '吳宗霖', '朱芳儀']],
+    ['公關聯繫', ['呂采如']],
+  ],
 };
 
 export const SECTIONS = [

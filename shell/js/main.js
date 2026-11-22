@@ -133,6 +133,17 @@ async function boot() {
 
   // ------------------------------------------------------------------ state
   const sound = new Sound();
+  // ?sound=0 opens the site with the sound switched off (for looking at it without noise)
+  if (new URLSearchParams(location.search).get('sound') === '0') {
+    sound.on = false;
+    $('#btn-sound').setAttribute('aria-pressed', 'false');
+    $('#sound-state').textContent = '關';
+  }
+  // the first click, tap or key lets the sound go where the browser was holding it (see Sound.wake)
+  for (const ev of ['pointerdown', 'keydown', 'touchend']) window.addEventListener(ev, () => sound.wake(true), { capture: true, passive: true });
+  // ...and while it is held, the cover says what will let it go (css: body.sound-held .how-sound)
+  const soundCue = () => body.classList.toggle('sound-held', sound.on && !!sound.ctx && sound.ctx.state !== 'running');
+  sound.onstate = soundCue;
   const seen = new Set();
   const S = {
     hero: true,
@@ -187,6 +198,7 @@ async function boot() {
       sound.set(!sound.on);
       $('#btn-sound').setAttribute('aria-pressed', String(sound.on));
       $('#sound-state').textContent = sound.on ? '開' : '關';
+      soundCue();
     },
     toggleGhost: (force) => {
       S.ghostOn = force === undefined ? !S.ghostOn : force;
@@ -235,6 +247,8 @@ async function boot() {
     S.hero = false;
     body.classList.add('in-world');
     sound.start();
+    // (the cover lets the sound in slowly; if that has not finished, the dive brings it up at once)
+    if (sound.on) sound.set(true);
     sound.whoosh();
     if (fly) tour.tween(1, 2.6);
     // the how-to stays on screen until the reader has taken one step, not for a fixed few seconds
@@ -401,6 +415,17 @@ async function boot() {
       const n = Number(e.key);
       if (!setBeat(n)) ui.beatTop(n);
       return;
+    }
+    // the finale, where the window is too short for it: down and up scroll it first; at its top,
+    // up steps back along the dive line as everywhere else
+    if (ui.finaleOn && finaleEl.classList.contains('scrolls') && ['ArrowDown', 'PageDown', 'ArrowUp', 'PageUp'].includes(e.key)) {
+      const down = e.key === 'ArrowDown' || e.key === 'PageDown';
+      const room = down ? finaleEl.scrollHeight - finaleEl.clientHeight - finaleEl.scrollTop : finaleEl.scrollTop;
+      if (room > 1) {
+        e.preventDefault();
+        finaleEl.scrollBy({ top: (down ? 1 : -1) * finaleEl.clientHeight * (e.key.startsWith('Page') ? 0.85 : 0.3) });
+        return;
+      }
     }
     if (['ArrowDown', 'ArrowRight', 'PageDown'].includes(e.key)) {
       e.preventDefault();
@@ -949,6 +974,11 @@ async function boot() {
   setTimeout(() => {
     body.classList.remove('is-loading');
     $('#enter').disabled = false;
+    // The city of the cover is on screen: its rain and its voices come in slowly. Where the browser
+    // holds a page's sound until the reader's first click or key, they come in at that moment.
+    sound.start(2.5);
+    // (an engine that is allowed to run takes a moment to say so: the cue waits for that)
+    setTimeout(soundCue, 700);
   }, 450);
   loop();
   // the marble head lives in the last zone, minutes away for a reader who starts at the cover:

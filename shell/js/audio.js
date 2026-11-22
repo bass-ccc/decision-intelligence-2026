@@ -14,11 +14,13 @@ export class Sound {
     this.ctx = null;
   }
 
-  start() {
+  // fade: how slowly the sound comes in (a time constant, in seconds). The cover lets it in slowly.
+  start(fade = 0.4) {
     if (this.ctx) return;
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     const ctx = (this.ctx = new AC());
+    ctx.onstatechange = () => this.onstate && this.onstate();
     const now = ctx.currentTime;
     this.master = ctx.createGain();
     this.master.gain.value = 0;
@@ -131,14 +133,37 @@ export class Sound {
 
     // (nothing applied yet: rain -1 is no value the world gives, so the first mix() writes it all)
     this.env = { rain: -1, under: 0, net: 0 };
-    this.set(this.on);
+    this.set(this.on, fade);
   }
 
-  set(on) {
+  set(on, fade = 0.4) {
     this.on = on;
     if (!this.ctx) return;
-    if (on && this.ctx.state === 'suspended') this.ctx.resume();
-    this.master.gain.setTargetAtTime(on ? 0.85 : 0, this.ctx.currentTime, 0.4);
+    this.wake();
+    this.master.gain.setTargetAtTime(on ? 0.85 : 0, this.ctx.currentTime, fade);
+  }
+
+  // A browser does not let a page sound before the reader has clicked, tapped or pressed a key:
+  // until then the engine exists but is held ('suspended'), and its clock stands still, so what
+  // was asked of it (the slow way in) begins when it is let go. Called at every click, tap and key.
+  // gesture: true when called from a click, a tap or a key (main.js). Any state but 'running' is
+  // let go ('suspended', and iOS Safari's 'interrupted' after the reader has been away).
+  wake(gesture = false) {
+    const c = this.ctx;
+    if (!c || !this.on || c.state === 'running' || c.state === 'closed') return;
+    // (isActive: this very event counts as a gesture for the browser. Escape, a modifier key and
+    // the first half of a touch do not.)
+    const ua = navigator.userActivation;
+    if (gesture && (!ua || ua.isActive)) this.askedAt = performance.now();
+    c.resume().catch(() => {});
+  }
+
+  // May a one-shot (a bell, a splash, a ping) be asked for now? Not while the browser is holding
+  // the sound: it would be written on a clock that stands still, and all of those would sound
+  // together when the clock is let go. Yes when the engine runs, or was let go by a gesture a
+  // moment ago and is about to (a past click is not enough: Safari wants the gesture itself).
+  ready() {
+    return !!this.ctx && this.on && (this.ctx.state === 'running' || performance.now() - (this.askedAt ?? -1e9) < 400);
   }
 
   // continuous mix from the world
@@ -161,7 +186,7 @@ export class Sound {
   }
 
   bell(n = 0) {
-    if (!this.ctx || !this.on) return;
+    if (!this.ready()) return;
     const ctx = this.ctx;
     const t = ctx.currentTime + 0.02;
     const f = 440 * Math.pow(2, SCALE[n % SCALE.length] / 12);
@@ -180,7 +205,7 @@ export class Sound {
   }
 
   noiseHit(dur, f0, f1, gain, type = 'bandpass') {
-    if (!this.ctx || !this.on) return;
+    if (!this.ready()) return;
     const ctx = this.ctx;
     const t = ctx.currentTime;
     const src = ctx.createBufferSource();
@@ -209,7 +234,7 @@ export class Sound {
   }
 
   glitch() {
-    if (!this.ctx || !this.on) return;
+    if (!this.ready()) return;
     const ctx = this.ctx;
     const t = ctx.currentTime;
     for (let i = 0; i < 6; i++) {
@@ -228,7 +253,7 @@ export class Sound {
   }
 
   drum(v = 1) {
-    if (!this.ctx || !this.on) return;
+    if (!this.ready()) return;
     const ctx = this.ctx;
     const t = ctx.currentTime;
     const o = ctx.createOscillator();
@@ -249,7 +274,7 @@ export class Sound {
   // The canal: a drop into water. The sea: a sounding and its echo (low, because everything under
   // water goes through the 700 Hz filter above). The Net: two short blips.
   ping(chapter) {
-    if (!this.ctx || !this.on) return;
+    if (!this.ready()) return;
     const ctx = this.ctx;
     const t = ctx.currentTime + 0.01;
     const tone = (type, f0, f1, at, dur, gain) => {
@@ -276,7 +301,7 @@ export class Sound {
   }
 
   ghost(on) {
-    if (!this.ctx || !this.on) return;
+    if (!this.ready()) return;
     const ctx = this.ctx;
     const t = ctx.currentTime;
     const o = ctx.createOscillator();

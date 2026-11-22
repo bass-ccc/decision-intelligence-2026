@@ -38,6 +38,10 @@ function decode(el, text, ms = 700) {
   step();
 }
 
+// The book's credits as on its own credits page: every role with its people, then the publisher.
+const creditsMarkup = () =>
+  (BOOK.credits || []).map(([role, names]) => `<span>${esc(role)}${names.map((n) => `<b>${esc(n)}</b>`).join('、')}</span>`).join('') + `<span>出版<b>${esc(BOOK.publisher)}</b></span>`;
+
 export class UI {
   constructor(actions) {
     this.actions = actions;
@@ -681,7 +685,7 @@ export class UI {
       $('#ix-body'),
       `<div class="ix-head"><img class="ix-cover" src="../assets/img/cover/front.jpg" alt="《2026 決策智慧》封面" /><h2><b>I</b>NDEX</h2><p>《2026 決策智慧》4 章、22 篇觀點、196 頁，放在 4 個深度：屋頂、運河、水下、深網。點任一篇，直接潛到那裡。</p></div>
       <div class="ix-grid">${secs}</div>
-      <div class="ix-credits"><span>發行人<b>唐心慧</b></span><span>總編輯<b>邵懿文</b></span><span>副總編輯<b>陳介立</b></span><span>出版<b>${esc(BOOK.publisher)}</b></span></div>`
+      <div class="ix-credits">${creditsMarkup()}</div>`
     );
     $('#ix-body').querySelectorAll('[data-no]').forEach((b) => {
       b.onclick = () => {
@@ -752,16 +756,26 @@ export class UI {
             <button class="btn btn-line" data-fn="again">再潛一次 ↺</button>
             <button class="btn btn-line" data-fn="index">目錄</button>
           </div>
-          <div class="fn-credits"><span>發行人<b>唐心慧</b></span><span>總編輯<b>邵懿文</b></span><span>副總編輯<b>陳介立</b></span><span>出版<b>${esc(BOOK.publisher)}</b></span></div>
+          <div class="fn-credits">${creditsMarkup()}</div>
         </div>`
       );
       if (printCanvas) $('#fn-print').appendChild(printCanvas);
+      this.fitFinale();
       this.finale.querySelector('[data-fn="save"]').onclick = () => this.actions.savePrint();
       this.finale.querySelector('[data-fn="again"]').onclick = () => this.actions.again();
       this.finale.querySelector('[data-fn="index"]').onclick = () => this.openPanel('index');
     }
     this.finale.classList.toggle('show', on);
     this.finale.setAttribute('aria-hidden', on ? 'false' : 'true');
+  }
+
+  // The finale scrolls only where the window cannot hold it. It is measured with the scrolling
+  // off: a box that scrolls counts its bottom padding as content and would call itself too tall
+  // when everything is on screen, and then the wheel and a swipe are taken from the dive for nothing.
+  fitFinale() {
+    const el = this.finale;
+    el.classList.remove('scrolls');
+    el.classList.toggle('scrolls', this.finaleOn && el.scrollHeight > el.clientHeight + 1);
   }
 
   // ---------------------------------------------------------------- panels
@@ -828,6 +842,7 @@ export class UI {
         this.setBeat(this.beat, { jump: true });
       }
       this.measureCard();
+      if (this.finaleOn) this.fitFinale();
     });
     let sx = null;
     let sy = 0;

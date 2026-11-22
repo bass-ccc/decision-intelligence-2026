@@ -81,6 +81,9 @@ body.in-world #hero { opacity: 0; transform: translateY(-24px); visibility: hidd
 @keyframes bob { 50% { transform: translateY(4px); } }
 .hero-how { margin-top: 18px; font-size: 13px; line-height: 1.7; color: var(--ink-2); }
 .how-touch { display: none; }
+/* said only while the browser is holding the sound until the reader's first click (main.js) */
+.how-sound { display: none; color: var(--ink-3); }
+body.sound-held .how-sound { display: block; }
 @media (hover: none) and (pointer: coarse) {
   .how-mouse { display: none; }
   .how-touch { display: inline; }
@@ -509,15 +512,23 @@ body.ghost-on .pm-count { opacity: 0; }
 .ix-list em { font-style: normal; font-family: var(--mono); font-size: 10px; color: var(--ink-3); padding-top: 4px; }
 .ix-list button.seen b::after { content: ' ●'; color: var(--c); font-size: 8px; vertical-align: middle; }
 .ix-credits { display: flex; flex-wrap: wrap; gap: 8px 28px; margin-top: 44px; font-size: 12px; color: var(--ink-3); }
-.ix-credits b { color: var(--ink-2); font-weight: 500; margin-left: 8px; }
+.ix-credits b { color: var(--ink-2); font-weight: 500; margin-left: 8px; white-space: nowrap; }
+/* a role with several people: a 、 stands between the names (ui.js), so no margin there, and a
+   line never breaks inside a name */
+.ix-credits b + b, .fn-credits b + b { margin-left: 0; }
 
 /* ---------------------------------------------------------------- finale */
 #finale {
   position: fixed; inset: 0; z-index: 18; display: grid; grid-template-columns: auto minmax(0, 520px); gap: clamp(24px, 5vw, 80px); align-items: center; justify-content: center;
   padding: 90px clamp(20px, 5vw, 70px) 50px; pointer-events: none; opacity: 0; transition: opacity 1.2s;
+  scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
   background: linear-gradient(90deg, rgba(8, 6, 8, 0) 0%, rgba(8, 6, 8, 0.25) 35%, rgba(8, 6, 8, 0.72) 70%, rgba(8, 6, 8, 0.8) 100%);
 }
 #finale.show { opacity: 1; pointer-events: auto; }
+/* It scrolls only where the window cannot hold it (ui.js fitFinale sets the class), on a phone and
+   on a short wide window alike. Elsewhere it is no scroller at all: the wheel and a swipe on it
+   belong to the dive (main.js ownScroll). */
+#finale.scrolls { overflow-y: auto; }
 .fn-print { width: min(330px, 34vw); aspect-ratio: 4 / 5; border: 1px solid rgba(255, 255, 255, 0.14); background: #07090b; box-shadow: 0 30px 90px rgba(0, 0, 0, 0.5); }
 .fn-print canvas { width: 100%; height: 100%; display: block; }
 .fn .mono { font-size: 11px; color: var(--ghost); }
@@ -526,8 +537,10 @@ body.ghost-on .pm-count { opacity: 0; }
 .fn p { font-size: 15px; line-height: 1.95; color: var(--ink-2); margin-top: 20px; }
 .fn p b { color: var(--ink); }
 .fn-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
-.fn-credits { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 30px; font-size: 11px; color: var(--ink-3); }
-.fn-credits b { color: var(--ink-2); font-weight: 500; margin-left: 6px; }
+/* (everyone on the credits page is named here, over the bright city of the dawn: one size up from
+   a footnote, lighter, and with a shadow under it, so the names can be read) */
+.fn-credits { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 30px; font-size: 12px; color: var(--ink-2); text-shadow: 0 1px 8px rgba(0, 0, 0, 0.75); }
+.fn-credits b { color: var(--ink); font-weight: 500; margin-left: 6px; white-space: nowrap; }
 
 #toast {
   position: fixed; left: 50%; bottom: 54px; transform: translate(-50%, 10px); z-index: 60; padding: 10px 18px; font-size: 13px;
@@ -558,7 +571,7 @@ body.panel-open #toast { opacity: 0 !important; }
   .tb .zh { font-size: 12px; }
   .tb { padding: 6px 6px; }
   .brand-text span { display: none; }
-  #finale { grid-template-columns: 1fr; overflow-y: auto; align-content: start; background: rgba(8, 6, 8, 0.72); }
+  #finale { grid-template-columns: 1fr; align-content: start; background: rgba(8, 6, 8, 0.72); }
   .hero-pub { display: none; }
   #toast { bottom: auto; top: 128px; white-space: normal; text-align: center; width: max-content; max-width: calc(100vw - 32px); }
   .cd-nav { margin-top: 12px; padding-top: 10px; }
