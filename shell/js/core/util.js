@@ -38,9 +38,10 @@ export function tier() {
     ? { name: 'low', mobile: true, reduced, dpr: Math.min(dpr, 1.5), msaa: 0, rain: 1800, snow: 900, reflect: 0.3, city: 0.6, cellCss: 7 }
     : { name: 'high', mobile: false, reduced, dpr: Math.min(dpr, 1.75), msaa: 4, rain: 5200, snow: 2400, reflect: 0.5, city: 1, cellCss: 8 };
   // testing overrides; values are clamped so a crafted link can't overload the visitor's GPU
+  // (the switch that turns the automatic step-down off, tier.fixed, is not offered to a link at all:
+  // the picture tool sets it from inside the page)
   if (q.has('msaa')) t.msaa = [0, 2, 4].includes(Number(q.get('msaa'))) ? Number(q.get('msaa')) : t.msaa;
   if (q.has('dpr')) t.dpr = clamp(Number(q.get('dpr')) || t.dpr, 0.5, 2);
-  if (q.has('fixed')) t.fixed = true;
   // ?motion=0 / ?motion=1 shows the reduced-motion or the full version whatever the system says
   if (q.has('motion')) t.reduced = q.get('motion') === '0';
   return t;

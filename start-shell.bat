@@ -1,5 +1,5 @@
 @echo off
-rem Opens the 3D world "DIVE" (Ghost in the Shell-inspired) in your browser. Keep this window open while you explore; close it to stop.
+rem Opens the 3D world "DIVE" in your browser. Keep this window open while you explore; close it to stop.
 cd /d "%~dp0"
 set "PY=python"
 where py >nul 2>nul && set "PY=py"
